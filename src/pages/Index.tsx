@@ -18,10 +18,10 @@ const Index = () => {
 
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
-            Lingbot World
+            Novatutor
           </h1>
           <p className="mt-2 text-muted-foreground text-lg">
-            Your friendly AI language tutor. Practice speaking any language through conversation.
+            Your friendly AI language tutor. Practice any language through conversation.
           </p>
         </div>
 
