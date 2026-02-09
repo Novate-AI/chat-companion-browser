@@ -9,7 +9,9 @@ export function useSpeechSynthesis(lang: string) {
   const speak = useCallback((text: string) => {
     if (!isSupported) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    // Strip English translations in parentheses so only the target language is spoken
+    const cleaned = text.replace(/\s*\([^)]*\)/g, "").replace(/\s{2,}/g, " ").trim();
+    const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = lang;
     utterance.rate = 0.9;
     utterance.onstart = () => setIsSpeaking(true);
