@@ -1,39 +1,71 @@
 
 
-# Lingbot World — Voice Language Tutor
+# Lingbot World — Implementation Plan
 
-A browser-based app where users can have voice or text conversations with **Lingbot**, an AI language tutor character that helps them practice multiple languages.
+## Overview
+Build a browser-based language tutor app where users chat (text or voice) with "Lingbot," a friendly AI language tutor. Uses the uploaded teacher image as the Lingbot character, browser-native Web Speech API for voice, and Lovable AI for tutoring intelligence.
 
----
+## What Gets Built
 
-## 1. Landing / Home Screen
-- Display the Lingbot character (using your uploaded image) front and center
-- A language selector letting users pick which language to practice (Spanish, French, Mandarin, Japanese, German, etc.)
-- A "Start Conversation" button to enter the chat
+### 1. Landing Page (Home Screen)
+- Lingbot character image displayed prominently
+- Language selector dropdown (Spanish, French, Mandarin, Japanese, German, Italian, Portuguese, Korean)
+- "Start Conversation" button
+- Clean, welcoming design with a language-learning theme
 
-## 2. Chat Interface
-- **Lingbot avatar** displayed prominently at the top with a visual indicator when Lingbot is "speaking"
-- **Message area** showing the conversation history (both user and Lingbot messages displayed as chat bubbles)
-- **Dual input options:**
-  - A **microphone button** to speak to Lingbot (speech-to-text using ElevenLabs)
-  - A **text input field** to type messages instead
-- Lingbot **always responds with voice** (text-to-speech using ElevenLabs) in addition to showing the text response
+### 2. Chat Page
+- Lingbot avatar at the top with a "speaking" animation indicator
+- Scrollable message area with chat bubbles (user on right, Lingbot on left)
+- Text input field with send button
+- Microphone button for voice input (uses browser SpeechRecognition API)
+- Lingbot speaks responses aloud (uses browser SpeechSynthesis API)
+- Visual indicators for mic active and Lingbot speaking states
 
-## 3. Lingbot AI Personality
-- Lingbot acts as a friendly, encouraging language tutor
-- Responds in the target language with translations/explanations when needed
-- Gently corrects mistakes and suggests better phrasing
-- Adapts to the user's level based on conversation context
-- Powered by Lovable AI (Gemini) for intelligent language tutoring responses
+### 3. AI Tutoring (via Lovable Cloud)
+- An edge function that receives user messages and the selected language
+- System prompt configuring Lingbot as a friendly language tutor that:
+  - Responds primarily in the target language
+  - Provides translations in parentheses for beginners
+  - Corrects mistakes gently
+  - Adapts difficulty based on conversation
+- Powered by Lovable AI (Gemini) — no extra API keys
 
-## 4. Voice Features
-- **Speech-to-Text**: User speaks → transcribed and sent to Lingbot (ElevenLabs Scribe)
-- **Text-to-Speech**: Lingbot's responses are spoken aloud with a natural voice (ElevenLabs TTS)
-- Visual feedback showing when the mic is active and when Lingbot is speaking
+### 4. Voice Features (Browser Native)
+- Speech-to-Text: Web SpeechRecognition API — user clicks mic, speaks, text appears
+- Text-to-Speech: Web SpeechSynthesis API — Lingbot's responses are read aloud using the language-appropriate voice
+- No external services or API keys required
+- Note: Works best in Chrome/Edge; limited support in some browsers
 
-## 5. Tech Approach
-- ElevenLabs for both speech-to-text and text-to-speech (requires connecting your ElevenLabs API key)
-- Lovable AI for the language tutor intelligence (built-in, no extra setup)
-- Lovable Cloud backend for secure API calls
-- Clean, mobile-friendly design
+## Technical Details
+
+### New Files to Create
+- `src/pages/Chat.tsx` — Chat interface page
+- `src/components/LingbotAvatar.tsx` — Lingbot character display with speaking indicator
+- `src/components/ChatBubble.tsx` — Message bubble component
+- `src/components/ChatInput.tsx` — Text input + mic button
+- `src/components/LanguageSelector.tsx` — Language picker component
+- `src/hooks/useSpeechRecognition.ts` — Hook wrapping browser SpeechRecognition
+- `src/hooks/useSpeechSynthesis.ts` — Hook wrapping browser SpeechSynthesis
+- `src/lib/languages.ts` — Language list and config (names, codes, voice tags)
+
+### Files to Modify
+- `src/pages/Index.tsx` — Replace with Lingbot landing page
+- `src/App.tsx` — Add /chat route
+- `index.html` — Update title to "Lingbot World"
+- `src/index.css` — Add custom colors for a friendly language-learning theme
+
+### Backend (Lovable Cloud)
+- Enable Lovable Cloud
+- Create an edge function `chat` that:
+  - Receives `{ message, language, conversationHistory }`
+  - Calls Lovable AI with a language-tutor system prompt
+  - Returns the AI response text
+
+### Asset
+- Copy uploaded teacher image to `src/assets/lingbot.png`
+
+## Limitations to Be Aware Of
+- Browser Speech APIs have varying support — Chrome/Edge work best, Safari and Firefox have partial support
+- Voice quality is basic compared to ElevenLabs but perfectly functional
+- Speech recognition accuracy varies by language and browser
 
