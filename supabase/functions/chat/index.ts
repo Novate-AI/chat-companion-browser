@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const languageNames: Record<string, string> = {
-  es: "Spanish", fr: "French", zh: "Mandarin Chinese", ja: "Japanese",
+  ar: "Arabic", en: "English", es: "Spanish", fr: "French", zh: "Mandarin Chinese", ja: "Japanese",
   de: "German", it: "Italian", pt: "Portuguese", ko: "Korean",
 };
 
