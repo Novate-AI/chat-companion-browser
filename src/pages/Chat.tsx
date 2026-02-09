@@ -64,7 +64,7 @@ const Chat = () => {
         return;
       }
       if (resp.status === 402) {
-        toast({ title: "Credits needed", description: "Please add credits to continue using Lingbot.", variant: "destructive" });
+        toast({ title: "Credits needed", description: "Please add credits to continue using Novatutor.", variant: "destructive" });
         setIsLoading(false);
         return;
       }
@@ -111,7 +111,7 @@ const Chat = () => {
       }
     } catch (e) {
       console.error(e);
-      toast({ title: "Error", description: "Could not reach Lingbot. Try again.", variant: "destructive" });
+      toast({ title: "Error", description: "Could not reach Novatutor. Try again.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +136,7 @@ const Chat = () => {
         </Button>
         <LingbotAvatar size="sm" isSpeaking={isSpeaking} />
         <div>
-          <p className="font-semibold text-sm">Lingbot</p>
+          <p className="font-semibold text-sm">Novatutor</p>
           <p className="text-xs text-muted-foreground">{lang.flag} {lang.name} tutor</p>
         </div>
       </header>

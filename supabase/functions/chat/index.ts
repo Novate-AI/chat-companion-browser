@@ -21,7 +21,7 @@ serve(async (req) => {
 
     const langName = languageNames[language] || "Spanish";
 
-    const systemPrompt = `You are Lingbot, a friendly and encouraging AI language tutor for ${langName}. Follow these rules:
+    const systemPrompt = `You are Novatutor, a friendly and encouraging AI language tutor for ${langName}. Follow these rules:
 
 1. Respond primarily in ${langName}.
 2. For beginners, provide English translations in parentheses after key phrases.
