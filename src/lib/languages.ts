@@ -7,6 +7,8 @@ export interface Language {
 }
 
 export const languages: Language[] = [
+  { code: "ar", name: "Arabic", flag: "🇸🇦", speechCode: "ar-SA", recognitionCode: "ar-SA" },
+  { code: "en", name: "English", flag: "🇬🇧", speechCode: "en-US", recognitionCode: "en-US" },
   { code: "es", name: "Spanish", flag: "🇪🇸", speechCode: "es-ES", recognitionCode: "es-ES" },
   { code: "fr", name: "French", flag: "🇫🇷", speechCode: "fr-FR", recognitionCode: "fr-FR" },
   { code: "zh", name: "Mandarin", flag: "🇨🇳", speechCode: "zh-CN", recognitionCode: "zh-CN" },
