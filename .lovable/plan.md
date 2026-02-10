@@ -1,107 +1,86 @@
 
 
-# Cheerful, Modern & Futuristic Landing Page Redesign
+# Improve Voice Quality and Add Kid-Safe Content
 
-## Problem
-The current design is dark and moody (black background). The user wants something **cheerful**, bright, and vibrant while still feeling modern and futuristic.
+## Overview
 
-## Design Direction
+Three focused improvements using the free browser Web Speech API (no external services or API keys needed):
 
-A **light, airy, colorful** design inspired by sites like Raycast, Notion, and Arc Browser -- clean white/cream backgrounds, vibrant gradients, playful floating shapes, and bold colorful accents. Think "futuristic optimism" not "futuristic dystopia."
+1. **Kid-safe content moderation** -- add strict rules to the AI system prompt so all conversations are appropriate for children
+2. **Natural speech formatting** -- instruct the AI to write in a way that sounds natural when read aloud (proper quoting, contractions, flowing sentences)
+3. **Better browser voice selection** -- upgrade the `useSpeechSynthesis` hook to automatically pick the highest-quality voice available on the user's device (prefer Google/Microsoft voices over default system voices) and tune rate, pitch, and pauses for more natural delivery
 
-## Visual Concept
+## What Changes
 
-- **Background**: Soft warm white/cream (`#FAFAF8`) with colorful gradient mesh blobs floating gently
-- **Hero**: Large bold heading with colorful gradient words, the logo floating above with a soft colored shadow (not a dark glow ring)
-- **Product Cards**: Bright, rounded cards with each product's signature color as a vivid gradient background on hover, with smooth 3D-like lift and shadow transitions
-- **Decorative elements**: Soft pastel gradient circles/blobs floating in background, subtle grid dots pattern
-- **Typography**: Dark text on light background for readability, accent colors for highlights
+### 1. System Prompt Updates (`supabase/functions/chat/index.ts`)
 
-## Color Palette
-- Background: warm white `#FAFAF8`
-- Novatutor: teal/cyan gradient
-- Nova IELTS: warm rose/coral gradient  
-- NovaPatient: violet/indigo gradient
-- Heading gradient: purple -> pink -> orange (warm, cheerful)
+**Kid-safe rules added to the system prompt:**
+- All content must be suitable for children aged 8 and above
+- Never discuss violence, profanity, sexual content, drugs, or any mature themes
+- If the user steers toward inappropriate topics, gently redirect back to language learning with a fun alternative topic
+- Keep all examples, vocabulary, and topics family-friendly (animals, food, school, hobbies, travel, sports, family)
 
-## Changes
+**Natural speech formatting rules:**
+- When correcting a phrase, write naturally -- e.g., *You should say, "Where are you from?"* -- never use code formatting, asterisks, or bullet points
+- Use commas for short pauses and periods for longer ones to create natural rhythm
+- Use contractions as people actually speak ("don't", "I'm", "let's")
+- Write in flowing sentences, not numbered lists or bullet points during conversation
+- Avoid technical grammar jargon -- explain corrections in simple, conversational words
 
-### 1. `src/pages/Index.tsx` -- Full Rewrite
-**Hero Section:**
-- Soft cream background with colorful floating gradient blobs (animated with `float` keyframe)
-- Logo displayed in a white circle with a colorful soft box-shadow (no dark blend mode needed on light bg)
-- Large heading: "Novate" in dark charcoal, "Persona" in a vibrant warm gradient
-- Tagline fades in with a cheerful tone
-- Subtle animated dot grid pattern for texture
+### 2. Smarter Voice Selection (`src/hooks/useSpeechSynthesis.ts`)
 
-**Product Cards (3 cards in a responsive grid):**
-- White card with rounded-2xl corners and a soft shadow
-- Left colored accent bar matching the product color
-- Icon in a vibrant filled circle (not dark/transparent)
-- On hover: card lifts up with a larger shadow, the accent color intensifies, a subtle gradient wash appears
-- Each card has a playful arrow that bounces on hover
-- Staggered entrance animations
+The current implementation uses whatever default voice the browser provides, which is often robotic. The upgrade will:
 
-**Footer:**
-- Light, minimal footer with a colorful gradient text "Novate"
+- On load, enumerate all available `speechSynthesis` voices using `getVoices()`
+- Score each voice by quality preference:
+  - Prefer voices containing "Google", "Microsoft", or "Natural" in the name (these are higher quality on Chrome/Edge)
+  - Prefer voices matching the exact language code (e.g., `en-GB` for English)
+  - Fall back to any voice matching the base language
+- Cache the selected voice so it stays consistent during the session
+- Set `pitch` to `1.0` and `rate` to `0.85` for a calmer, more natural pace (slightly slower than current `0.9`)
+- Handle the Chrome quirk where `getVoices()` returns empty until the `voiceschanged` event fires
 
-### 2. `src/index.css` -- Update Utilities
-- Update `.gradient-text` to use cheerful warm gradient (purple -> pink -> orange)
-- Update `.glass-card` to work on light backgrounds (white with soft shadow instead of dark transparency)
-- Update `.noise-overlay` to be very subtle on light backgrounds
-- Update `.grid-pattern` to use soft gray dots instead of white lines on dark
-- Update `.glow-ring` to use soft pastel colors instead of dark neon
-- Add `.logo-shadow` utility for a colorful drop shadow on the logo
-- Keep `.logo-blend` but it won't be used (logo on white bg looks fine naturally)
+### 3. Files Modified
 
-### 3. `tailwind.config.ts` -- Minor Updates
-- Add a `bounce-right` keyframe for arrow hover animation
-- Existing keyframes (float, fade-in-up, ring-pulse) remain and are reused
+| File | Change |
+|------|--------|
+| `supabase/functions/chat/index.ts` | Add kid-safe rules and natural speech formatting instructions to the system prompt |
+| `src/hooks/useSpeechSynthesis.ts` | Add smart voice selection logic that picks the best available voice, tune rate and pitch |
 
-## Card Layout (Desktop)
-
-```text
-+-------------------+  +-------------------+  +-------------------+
-|  [teal icon]      |  |  [rose icon]      |  |  [violet icon]    |
-|                   |  |                   |  |                   |
-|  Novatutor        |  |  Nova IELTS       |  |  NovaPatient      |
-|  AI Language      |  |  AI IELTS         |  |  AI Patient for   |
-|  Tutor            |  |  Speaking Coach   |  |  Clinical Practice|
-|                   |  |                   |  |                   |
-|  Description...   |  |  Description...   |  |  Description...   |
-|                   |  |                   |  |                   |
-|  Get Started ->   |  |  Get Started ->   |  |  Get Started ->   |
-+-------------------+  +-------------------+  +-------------------+
-```
-
-On mobile: stacks vertically.
+No new dependencies, no new API keys, no new edge functions needed. Everything stays free.
 
 ## Technical Details
 
-**Background blobs (CSS):**
-- 3-4 absolutely positioned divs with vibrant gradient backgrounds, large border-radius, blur(80px), and low opacity
-- Animated with the existing `float` keyframe at different speeds/delays
+**Voice selection scoring algorithm:**
 
-**Card hover effect:**
-- `transition-all duration-300`
-- `hover:-translate-y-2 hover:shadow-2xl`
-- Colored top/left border intensifies
+```text
+For each voice in speechSynthesis.getVoices():
+  score = 0
+  if voice.lang matches exact target (e.g., "en-GB")  -> score += 10
+  if voice.lang matches base language (e.g., "en-*")   -> score += 5
+  if voice.name contains "Google"                       -> score += 3
+  if voice.name contains "Microsoft"                    -> score += 3
+  if voice.name contains "Natural"                      -> score += 2
+  if voice.localService is false (network voice)        -> score += 1
 
-**New keyframe -- bounce-right:**
-```
-"bounce-right": {
-  "0%, 100%": { transform: "translateX(0)" },
-  "50%": { transform: "translateX(6px)" }
-}
+Pick the voice with the highest score.
 ```
 
-**Logo treatment on light background:**
-- Simply place in a white rounded-full container with a multi-colored box-shadow
-- No blend modes needed since white bg on white container is seamless
+**Chrome voices quirk handling:**
+- `speechSynthesis.getVoices()` often returns `[]` on first call in Chrome
+- Listen for the `voiceschanged` event and re-select when voices become available
+- Use a `useEffect` with cleanup to manage the event listener
 
-## Files Modified
-- `src/pages/Index.tsx` -- full rewrite (cheerful light theme)
-- `src/index.css` -- update utility classes for light theme
-- `tailwind.config.ts` -- add bounce-right keyframe
+**System prompt additions (appended after existing rules):**
 
-## No new dependencies needed.
+Kid-safe block:
+- "All content must be suitable for children aged 8 and above. Never use or discuss profanity, violence, sexual content, drugs, alcohol, or any mature themes."
+- "If the user tries to discuss inappropriate topics, respond warmly with something like: 'That is not really my area! How about we learn some fun words about [animals/food/sports] instead?'"
+- "Keep all vocabulary examples and conversation topics family-friendly."
+
+Natural speech block:
+- "When correcting a user's phrase, write it naturally. For example, write: You should say, 'Where are you from?' Never use code formatting, markdown, or asterisks."
+- "Use commas for short pauses and periods for longer pauses to create natural speech rhythm."
+- "Use contractions like a real person would: 'don't' instead of 'do not', 'I'm' instead of 'I am', 'let's' instead of 'let us'."
+- "Write in flowing, conversational sentences. Avoid numbered lists or bullet points in your main response."
+
