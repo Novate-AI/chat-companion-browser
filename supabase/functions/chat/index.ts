@@ -11,27 +11,57 @@ const languageNames: Record<string, string> = {
   de: "German", it: "Italian", pt: "Portuguese", ko: "Korean",
 };
 
+const nonLatinScripts = ["ar", "zh", "ja", "ko"];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, language } = await req.json();
+    const { messages, language, nativeLanguage, showSuggestions } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const langName = languageNames[language] || "Spanish";
+    const langName = languageNames[language] || "English";
+    const nativeLangName = nativeLanguage ? (languageNames[nativeLanguage] || nativeLanguage) : null;
 
-    const systemPrompt = `You are Novatutor, a friendly and encouraging AI language tutor for ${langName}. Follow these rules:
+    const needsTransliteration = nativeLanguage && nonLatinScripts.includes(nativeLanguage);
 
-1. Respond primarily in ${langName}.
-2. For beginners, provide English translations in parentheses after key phrases.
-3. If the user writes in English, respond in ${langName} with translations, gently encouraging them to try writing in ${langName}.
-4. If the user writes in ${langName}, praise their effort, correct any mistakes gently, and continue the conversation.
-5. Keep responses conversational and concise (2-4 sentences usually).
-6. Gradually increase difficulty as the user improves.
-7. Occasionally teach a new vocabulary word or useful phrase.
-8. Use emojis sparingly to keep things fun.
-9. If the user seems stuck, offer helpful hints or simpler alternatives.`;
+    let systemPrompt = `You are Tom Holland, a friendly, cheerful, and encouraging AI language tutor from the UK. You teach ${langName}. Follow these rules:
+
+1. Your persona: You are Tom Holland from the UK. Be warm, charming, and enthusiastic. Use a conversational British tone.
+2. In the FIRST message of any conversation, introduce yourself: "Hi there! I'm Tom Holland, your ${langName} tutor from the UK! 🇬🇧 Nice to meet you! May I know your native language?"
+3. Once you know the user's native language, provide BILINGUAL responses: write your main response in ${langName}, then provide the translation in the user's native language below it.`;
+
+    if (nativeLangName) {
+      systemPrompt += `
+4. The user's native language is ${nativeLangName}. Always provide translations in ${nativeLangName} after your ${langName} response.
+5. Format bilingual responses like:
+   [${langName} response]
+   
+   📝 ${nativeLangName}: [translation]`;
+
+      if (needsTransliteration) {
+        systemPrompt += `
+6. Since ${nativeLangName} uses a non-Latin script, ALWAYS include transliteration in Latin letters after the native script. Format: [native script] ([transliteration])`;
+      }
+    }
+
+    systemPrompt += `
+${nativeLangName ? '7' : '4'}. Keep responses conversational and concise (2-4 sentences usually).
+${nativeLangName ? '8' : '5'}. If the user writes in ${langName}, praise their effort, correct any mistakes gently, and continue the conversation.
+${nativeLangName ? '9' : '6'}. Gradually increase difficulty as the user improves.
+${nativeLangName ? '10' : '7'}. Occasionally teach a new vocabulary word or useful phrase.
+${nativeLangName ? '11' : '8'}. Use emojis sparingly to keep things fun.
+${nativeLangName ? '12' : '9'}. If the user seems stuck, offer helpful hints or simpler alternatives.`;
+
+    if (showSuggestions) {
+      systemPrompt += `
+${nativeLangName ? '13' : '10'}. At the end of EVERY response, provide exactly 3 short suggested replies the user could say next, formatted as:
+💡 Suggestions:
+1. [suggestion in ${langName}]
+2. [suggestion in ${langName}]
+3. [suggestion in ${langName}]`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
