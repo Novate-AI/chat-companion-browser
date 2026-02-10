@@ -1,86 +1,92 @@
 
 
-# Improve Voice Quality and Add Kid-Safe Content
+# Fix Voice Lag -- Stream Audio While Chat is Streaming
 
-## Overview
+## Problem
 
-Three focused improvements using the free browser Web Speech API (no external services or API keys needed):
+The voice playback lags behind the chat text because of two sequential bottlenecks:
+1. The app waits for the **entire chat response** to finish streaming before sending text to ElevenLabs
+2. The ElevenLabs call waits for the **entire audio file** to be generated before playback begins
 
-1. **Kid-safe content moderation** -- add strict rules to the AI system prompt so all conversations are appropriate for children
-2. **Natural speech formatting** -- instruct the AI to write in a way that sounds natural when read aloud (proper quoting, contractions, flowing sentences)
-3. **Better browser voice selection** -- upgrade the `useSpeechSynthesis` hook to automatically pick the highest-quality voice available on the user's device (prefer Google/Microsoft voices over default system voices) and tune rate, pitch, and pauses for more natural delivery
+This creates a noticeable delay: chat finishes, then silence, then voice starts seconds later.
+
+## Solution
+
+Implement **chunked TTS** so audio starts playing while the chat is still streaming, and use ElevenLabs' streaming audio endpoint so playback begins before the full audio is generated.
 
 ## What Changes
 
-### 1. System Prompt Updates (`supabase/functions/chat/index.ts`)
+### 1. Start TTS earlier with sentence chunking (`src/pages/Chat.tsx`)
 
-**Kid-safe rules added to the system prompt:**
-- All content must be suitable for children aged 8 and above
-- Never discuss violence, profanity, sexual content, drugs, or any mature themes
-- If the user steers toward inappropriate topics, gently redirect back to language learning with a fun alternative topic
-- Keep all examples, vocabulary, and topics family-friendly (animals, food, school, hobbies, travel, sports, family)
+Instead of waiting for the full response, detect complete sentences as they stream in and send each sentence to TTS immediately.
 
-**Natural speech formatting rules:**
-- When correcting a phrase, write naturally -- e.g., *You should say, "Where are you from?"* -- never use code formatting, asterisks, or bullet points
-- Use commas for short pauses and periods for longer ones to create natural rhythm
-- Use contractions as people actually speak ("don't", "I'm", "let's")
-- Write in flowing sentences, not numbered lists or bullet points during conversation
-- Avoid technical grammar jargon -- explain corrections in simple, conversational words
+- Track which text has already been sent to TTS
+- As new content streams in, extract complete sentences (split on `.` `!` `?`)
+- Queue each sentence for TTS playback in order
+- Remove the "wait for isLoading to flip" pattern
 
-### 2. Smarter Voice Selection (`src/hooks/useSpeechSynthesis.ts`)
+### 2. Stream audio from ElevenLabs (`supabase/functions/elevenlabs-tts/index.ts`)
 
-The current implementation uses whatever default voice the browser provides, which is often robotic. The upgrade will:
+Switch from buffering the full audio to streaming it through:
 
-- On load, enumerate all available `speechSynthesis` voices using `getVoices()`
-- Score each voice by quality preference:
-  - Prefer voices containing "Google", "Microsoft", or "Natural" in the name (these are higher quality on Chrome/Edge)
-  - Prefer voices matching the exact language code (e.g., `en-GB` for English)
-  - Fall back to any voice matching the base language
-- Cache the selected voice so it stays consistent during the session
-- Set `pitch` to `1.0` and `rate` to `0.85` for a calmer, more natural pace (slightly slower than current `0.9`)
-- Handle the Chrome quirk where `getVoices()` returns empty until the `voiceschanged` event fires
+- Use ElevenLabs streaming endpoint (same URL, just pipe the response body directly instead of buffering with `arrayBuffer()`)
+- Return the audio stream to the client as it arrives
+- This alone cuts perceived latency by 1-3 seconds
 
-### 3. Files Modified
+### 3. Play audio as it streams (`src/hooks/useSpeechSynthesis.ts`)
+
+Update the hook to support:
+
+- A **queue system** for multiple text chunks (sentences) arriving over time
+- Play chunks sequentially -- when one finishes, start the next
+- Use `MediaSource` API or sequential `Audio` elements for gapless playback
+- Keep the fallback to browser speech if ElevenLabs fails
+
+## Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/functions/chat/index.ts` | Add kid-safe rules and natural speech formatting instructions to the system prompt |
-| `src/hooks/useSpeechSynthesis.ts` | Add smart voice selection logic that picks the best available voice, tune rate and pitch |
-
-No new dependencies, no new API keys, no new edge functions needed. Everything stays free.
+| `supabase/functions/elevenlabs-tts/index.ts` | Stream audio response instead of buffering the full file |
+| `src/hooks/useSpeechSynthesis.ts` | Add a sentence queue system -- accept chunks, play them sequentially |
+| `src/pages/Chat.tsx` | Send sentences to TTS as they stream in, rather than waiting for the full response |
 
 ## Technical Details
 
-**Voice selection scoring algorithm:**
+**Sentence chunking logic (Chat.tsx):**
+
+The `processStream` function already assembles text token-by-token. We add a tracker for the last TTS position, and after each token, check if a new complete sentence has formed:
 
 ```text
-For each voice in speechSynthesis.getVoices():
-  score = 0
-  if voice.lang matches exact target (e.g., "en-GB")  -> score += 10
-  if voice.lang matches base language (e.g., "en-*")   -> score += 5
-  if voice.name contains "Google"                       -> score += 3
-  if voice.name contains "Microsoft"                    -> score += 3
-  if voice.name contains "Natural"                      -> score += 2
-  if voice.localService is false (network voice)        -> score += 1
-
-Pick the voice with the highest score.
+spokenUpTo = 0
+onNewContent(fullText):
+  remaining = fullText.slice(spokenUpTo)
+  sentences = split remaining on sentence boundaries (. ! ?)
+  for each complete sentence (not the last partial one):
+    queue sentence for TTS
+    spokenUpTo += sentence.length
 ```
 
-**Chrome voices quirk handling:**
-- `speechSynthesis.getVoices()` often returns `[]` on first call in Chrome
-- Listen for the `voiceschanged` event and re-select when voices become available
-- Use a `useEffect` with cleanup to manage the event listener
+**Audio queue (useSpeechSynthesis.ts):**
 
-**System prompt additions (appended after existing rules):**
+```text
+queue = []
+isPlaying = false
 
-Kid-safe block:
-- "All content must be suitable for children aged 8 and above. Never use or discuss profanity, violence, sexual content, drugs, alcohol, or any mature themes."
-- "If the user tries to discuss inappropriate topics, respond warmly with something like: 'That is not really my area! How about we learn some fun words about [animals/food/sports] instead?'"
-- "Keep all vocabulary examples and conversation topics family-friendly."
+speakQueued(text):
+  queue.push(text)
+  if not isPlaying: playNext()
 
-Natural speech block:
-- "When correcting a user's phrase, write it naturally. For example, write: You should say, 'Where are you from?' Never use code formatting, markdown, or asterisks."
-- "Use commas for short pauses and periods for longer pauses to create natural speech rhythm."
-- "Use contractions like a real person would: 'don't' instead of 'do not', 'I'm' instead of 'I am', 'let's' instead of 'let us'."
-- "Write in flowing, conversational sentences. Avoid numbered lists or bullet points in your main response."
+playNext():
+  if queue is empty: isPlaying = false; return
+  isPlaying = true
+  chunk = queue.shift()
+  fetch TTS for chunk
+  play audio
+  on audio ended: playNext()
+```
 
+**Edge function streaming:**
+
+Replace `await response.arrayBuffer()` with directly piping `response.body` to the client response. This means audio bytes start flowing to the browser as soon as ElevenLabs begins generating.
+
+No new dependencies needed. ElevenLabs API usage stays the same (same endpoint, same model).
