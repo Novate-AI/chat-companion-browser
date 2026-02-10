@@ -19,12 +19,6 @@ export function useSpeechRecognition({ lang, onResult }: UseSpeechRecognitionOpt
 
   const start = useCallback(() => {
     if (!isSupported) return;
-    // Stop any existing recognition first
-    try {
-      recognitionRef.current?.stop();
-    } catch {
-      // ignore
-    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognitionCtor();
@@ -37,19 +31,11 @@ export function useSpeechRecognition({ lang, onResult }: UseSpeechRecognitionOpt
       onResult(transcript);
     };
     recognition.onend = () => setIsListening(false);
-    recognition.onerror = (e: { error: string }) => {
-      console.warn("SpeechRecognition error:", e.error);
-      setIsListening(false);
-    };
+    recognition.onerror = () => setIsListening(false);
 
     recognitionRef.current = recognition;
-    try {
-      recognition.start();
-      setIsListening(true);
-    } catch (err) {
-      console.warn("SpeechRecognition start failed:", err);
-      setIsListening(false);
-    }
+    recognition.start();
+    setIsListening(true);
   }, [lang, onResult, isSupported]);
 
   const stop = useCallback(() => {

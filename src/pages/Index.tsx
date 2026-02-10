@@ -153,7 +153,7 @@ const Index = () => {
           <div className="inline-block">
             <span className="text-xs text-slate-400 tracking-wide">
               Built by{" "}
-              <span className="gradient-text font-semibold">Novate AI Group (M) Sdn Bhd</span>
+              <span className="gradient-text font-semibold">Novate</span>
             </span>
             <div className="h-px w-full mt-1 bg-gradient-to-r from-transparent via-purple-400/50 to-transparent" />
           </div>

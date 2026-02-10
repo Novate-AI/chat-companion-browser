@@ -1,65 +1,92 @@
 
 
-# Fix: AI Text Being Overwritten by Next Response
+# Fix Voice Lag -- Stream Audio While Chat is Streaming
 
-## Root Cause
+## Problem
 
-The `processStream` function uses a flawed heuristic to update streaming messages: it checks if the last message is from the "assistant" and overwrites it. This means if two AI responses stream in quick succession (which happens during intro phases), the second response **replaces the text** of the first one.
+The voice playback lags behind the chat text because of two sequential bottlenecks:
+1. The app waits for the **entire chat response** to finish streaming before sending text to ElevenLabs
+2. The ElevenLabs call waits for the **entire audio file** to be generated before playback begins
 
-The audio from the first response still plays because it was already queued in the TTS system before being overwritten.
+This creates a noticeable delay: chat finishes, then silence, then voice starts seconds later.
 
-## Timeline of the Bug
+## Solution
 
-1. ASK_NAME triggers, AI streams "Hello my name is Tom..." -- text appears, audio queued
-2. Stream finishes, `isLoading` goes false
-3. Mic-off fallback or another trigger fires ASK_NICKNAME_ORIGIN
-4. New stream starts -- `processStream` sees last message is "assistant" and **overwrites** the "My name is Tom" text with "And what shall I call you..."
+Implement **chunked TTS** so audio starts playing while the chat is still streaming, and use ElevenLabs' streaming audio endpoint so playback begins before the full audio is generated.
 
-## Fix
+## What Changes
 
-### Change 1: Track message ownership in `processStream` (`src/pages/IeltsChat.tsx`)
+### 1. Start TTS earlier with sentence chunking (`src/pages/Chat.tsx`)
 
-Instead of blindly checking if the last message is "assistant", use a local flag to track whether THIS stream has already created its message. This prevents one stream from overwriting another stream's message.
+Instead of waiting for the full response, detect complete sentences as they stream in and send each sentence to TTS immediately.
 
+- Track which text has already been sent to TTS
+- As new content streams in, extract complete sentences (split on `.` `!` `?`)
+- Queue each sentence for TTS playback in order
+- Remove the "wait for isLoading to flip" pattern
+
+### 2. Stream audio from ElevenLabs (`supabase/functions/elevenlabs-tts/index.ts`)
+
+Switch from buffering the full audio to streaming it through:
+
+- Use ElevenLabs streaming endpoint (same URL, just pipe the response body directly instead of buffering with `arrayBuffer()`)
+- Return the audio stream to the client as it arrives
+- This alone cuts perceived latency by 1-3 seconds
+
+### 3. Play audio as it streams (`src/hooks/useSpeechSynthesis.ts`)
+
+Update the hook to support:
+
+- A **queue system** for multiple text chunks (sentences) arriving over time
+- Play chunks sequentially -- when one finishes, start the next
+- Use `MediaSource` API or sequential `Audio` elements for gapless playback
+- Keep the fallback to browser speech if ElevenLabs fails
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `supabase/functions/elevenlabs-tts/index.ts` | Stream audio response instead of buffering the full file |
+| `src/hooks/useSpeechSynthesis.ts` | Add a sentence queue system -- accept chunks, play them sequentially |
+| `src/pages/Chat.tsx` | Send sentences to TTS as they stream in, rather than waiting for the full response |
+
+## Technical Details
+
+**Sentence chunking logic (Chat.tsx):**
+
+The `processStream` function already assembles text token-by-token. We add a tracker for the last TTS position, and after each token, check if a new complete sentence has formed:
+
+```text
+spokenUpTo = 0
+onNewContent(fullText):
+  remaining = fullText.slice(spokenUpTo)
+  sentences = split remaining on sentence boundaries (. ! ?)
+  for each complete sentence (not the last partial one):
+    queue sentence for TTS
+    spokenUpTo += sentence.length
 ```
-processStream logic change:
-- Add local boolean: messageCreated = false
-- On first content chunk: ALWAYS append a new assistant message, set messageCreated = true
-- On subsequent chunks: find and update only the message created by this stream (use the message index captured when it was created)
+
+**Audio queue (useSpeechSynthesis.ts):**
+
+```text
+queue = []
+isPlaying = false
+
+speakQueued(text):
+  queue.push(text)
+  if not isPlaying: playNext()
+
+playNext():
+  if queue is empty: isPlaying = false; return
+  isPlaying = true
+  chunk = queue.shift()
+  fetch TTS for chunk
+  play audio
+  on audio ended: playNext()
 ```
 
-Specifically, track the index of the message this stream created:
+**Edge function streaming:**
 
-```typescript
-let myMessageIndex = -1;
+Replace `await response.arrayBuffer()` with directly piping `response.body` to the client response. This means audio bytes start flowing to the browser as soon as ElevenLabs begins generating.
 
-setMessages((prev) => {
-  if (myMessageIndex === -1) {
-    // First chunk: always create a new message
-    myMessageIndex = prev.length;
-    return [...prev, { role: "assistant", content: snapshot }];
-  }
-  // Subsequent chunks: update only our message by index
-  return prev.map((m, i) => (i === myMessageIndex ? { ...m, content: snapshot } : m));
-});
-```
-
-### Change 2: Add guard to mic-off fallback (`src/pages/IeltsChat.tsx`)
-
-Add an additional check: only auto-advance if `isSpeaking` is also false (meaning the AI has finished speaking the current response). This prevents the fallback from firing while audio is still playing.
-
-```typescript
-// Line 125: add !isSpeaking check
-if (wasListeningRef.current && !isListening && !isLoading && !isSpeaking) {
-```
-
-## Files Changed
-
-- `src/pages/IeltsChat.tsx` -- two targeted edits
-
-## Result
-
-- Each AI response gets its own chat bubble that cannot be overwritten by the next response
-- Mic-off fallback waits for audio to finish before auto-advancing
-- Audio and text will always match
-
+No new dependencies needed. ElevenLabs API usage stays the same (same endpoint, same model).
