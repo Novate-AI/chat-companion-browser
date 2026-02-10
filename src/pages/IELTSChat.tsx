@@ -74,11 +74,19 @@ const IELTSChat = () => {
 
   // Pending transcript accumulated during response windows
   const pendingTranscriptRef = useRef("");
+  const inTimedWindowRef = useRef(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleUserResponseRef = useRef<(input: string) => void>(null as any);
 
-  // Voice recognition - only accumulates, does NOT advance
+  // Voice recognition callback
   const onVoiceResult = useCallback((transcript: string) => {
-    // This fires when stop() is called — transcript is already accumulated
-    pendingTranscriptRef.current = transcript;
+    if (inTimedWindowRef.current) {
+      // In a timed window — just store, timer expiry will collect it
+      pendingTranscriptRef.current = transcript;
+    } else {
+      // Non-timed phase (intro, name, origin, id-check) — advance immediately
+      handleUserResponseRef.current?.(transcript);
+    }
   }, []);
 
   const { isListening, start: startListening, stop: stopListening, isSupported: micSupported } =
@@ -160,6 +168,7 @@ const IELTSChat = () => {
   };
 
   const startUserResponseWindow = (seconds: number) => {
+    inTimedWindowRef.current = true;
     pendingTranscriptRef.current = "";
     // Start mic — first call must originate from user gesture context (already granted)
     if (micSupported) startListening();
@@ -171,6 +180,7 @@ const IELTSChat = () => {
       setTimeout(() => {
         const transcript = pendingTranscriptRef.current.trim() || "(no response - time expired)";
         pendingTranscriptRef.current = "";
+        inTimedWindowRef.current = false;
         advanceAfterUserResponse(transcript);
       }, 100);
     });
@@ -260,6 +270,7 @@ const IELTSChat = () => {
   // Handle manual user submission (typed text or explicit send)
   const handleUserResponse = (input: string) => {
     if (isLoading || testFinished) return;
+    inTimedWindowRef.current = false;
     stopAllTimers();
     stopListening();
 
@@ -273,6 +284,7 @@ const IELTSChat = () => {
 
     advanceAfterUserResponse(finalInput);
   };
+  handleUserResponseRef.current = handleUserResponse;
 
   const advanceAfterUserResponse = (userInput: string) => {
     // Add user message if not already added (timer-driven path)
@@ -404,6 +416,7 @@ const IELTSChat = () => {
   };
 
   const startUserResponseWindowLong = (seconds: number) => {
+    inTimedWindowRef.current = true;
     pendingTranscriptRef.current = "";
     if (micSupported) startListening();
     startCountdown(seconds, "Speaking time", () => {
@@ -411,6 +424,7 @@ const IELTSChat = () => {
       setTimeout(() => {
         const transcript = pendingTranscriptRef.current.trim() || "(speaking time ended)";
         pendingTranscriptRef.current = "";
+        inTimedWindowRef.current = false;
         advanceAfterUserResponse(transcript);
       }, 100);
     });
