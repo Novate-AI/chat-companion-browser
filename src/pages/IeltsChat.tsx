@@ -39,6 +39,7 @@ const IeltsChat = () => {
 
   const { isSpeaking, speak, speakQueued, stop: stopSpeaking } = useSpeechSynthesis("en-GB");
   const spokenUpToRef = useRef(0);
+  const wasListeningRef = useRef(false);
 
   // Track post-AI action type
   const pendingActionRef = useRef<"mic_only" | "mic_and_timer" | "auto_advance" | null>(null);
@@ -94,8 +95,7 @@ const IeltsChat = () => {
       pendingTimerPhaseRef.current = null;
 
       if (action === "mic_only") {
-        // Just start mic, no timer (intro phases)
-        startListening();
+        // Do nothing — user will click mic manually
       } else if (action === "mic_and_timer") {
         let duration = 0;
         if (currentPhase === "PART1_QUESTION") duration = 17;
@@ -104,7 +104,7 @@ const IeltsChat = () => {
         else if (currentPhase === "ASK_ID") duration = 5;
 
         if (currentPhase === "PART1_QUESTION" || currentPhase === "PART2_SPEAK" || currentPhase === "PART3_QUESTION") {
-          startListening();
+          // Timer only — no auto-mic. User clicks mic when ready.
           startTimer(duration, false, () => {
             stopListening();
             handleTimerExpire();
@@ -119,7 +119,6 @@ const IeltsChat = () => {
           });
         }
       } else if (action === "auto_advance") {
-        // Auto-advance to next phase after AI finishes speaking
         const nextPhase = advancePhase();
         if (nextPhase !== "CONCLUSION") {
           triggerAIMessage(nextPhase);
@@ -128,6 +127,28 @@ const IeltsChat = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpeaking]);
+
+  // Detect mic turning off without speech captured — auto-advance to next question
+  useEffect(() => {
+    if (wasListeningRef.current && !isListening && !isLoading) {
+      // Mic just turned off. Check if user speech was NOT captured.
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant") {
+          // No user message was added — advance to next question
+          setTimeout(() => {
+            const nextPhase = advancePhase();
+            if (nextPhase !== "CONCLUSION") {
+              triggerAIMessageRef.current(nextPhase);
+            }
+          }, 300);
+        }
+        return prev; // don't mutate
+      });
+    }
+    wasListeningRef.current = isListening;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening]);
 
   // Auto intro on mount
   useEffect(() => {
