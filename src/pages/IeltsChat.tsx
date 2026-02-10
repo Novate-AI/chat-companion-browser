@@ -44,9 +44,11 @@ const IeltsChat = () => {
   const pendingActionRef = useRef<"mic_only" | "mic_and_timer" | "auto_advance" | null>(null);
   const pendingTimerPhaseRef = useRef<IeltsPhase | null>(null);
 
+  // Use ref to avoid stale closure in onVoiceResult
+  const sendMessageRef = useRef<(input: string) => void>(() => {});
+
   const onVoiceResult = useCallback((transcript: string) => {
-    sendMessage(transcript);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    sendMessageRef.current(transcript);
   }, []);
 
   const { isListening, start: startListening, stop: stopListening, isSupported: micSupported } =
@@ -212,7 +214,7 @@ const IeltsChat = () => {
     // CONCLUSION - do nothing, test is over
   };
 
-  const sendMessage = async (input: string) => {
+  const sendMessage = useCallback(async (input: string) => {
     stopTimer();
     if (isListening) stopListening();
 
@@ -226,7 +228,13 @@ const IeltsChat = () => {
     }
 
     triggerAIMessage(nextPhase);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, questionIndex, advancePhase, stopTimer, isListening, stopListening]);
+
+  // Keep sendMessageRef always pointing to latest sendMessage
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   const processStream = async (body: ReadableStream<Uint8Array>, assistantSoFar: string): Promise<string> => {
     const reader = body.getReader();
