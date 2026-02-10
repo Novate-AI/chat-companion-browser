@@ -89,6 +89,14 @@ export default {
           "50%": { backgroundPosition: "100% 50%" },
           "100%": { backgroundPosition: "0% 50%" },
         },
+        "ring-pulse": {
+          "0%, 100%": { opacity: "0.5", transform: "scale(1)" },
+          "50%": { opacity: "0.8", transform: "scale(1.05)" },
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -97,6 +105,8 @@ export default {
         "glow-pulse": "glow-pulse 3s ease-in-out infinite",
         "fade-in-up": "fade-in-up 0.6s ease-out forwards",
         "gradient-shift": "gradient-shift 8s ease infinite",
+        "ring-pulse": "ring-pulse 4s ease-in-out infinite",
+        "shimmer": "shimmer 3s linear infinite",
       },
     },
   },

@@ -11,10 +11,12 @@ const products = [
       "Practice any language through natural conversation. Get real-time corrections, translations, and adaptive difficulty.",
     icon: BookOpen,
     path: "/novatutor",
-    glowColor: "from-teal-400 to-emerald-500",
-    iconGlow: "shadow-teal-500/40",
-    borderGlow: "hover:border-teal-500/50",
-    iconBg: "bg-teal-500/15 text-teal-400",
+    accent: "teal",
+    borderColor: "border-l-teal-400",
+    iconBg: "bg-teal-500/15 text-teal-400 shadow-teal-500/30",
+    hoverBorder: "group-hover:border-l-teal-400",
+    hoverText: "group-hover:text-teal-400",
+    glowColor: "group-hover:shadow-[0_0_30px_rgba(45,212,191,0.15)]",
     delay: "0s",
   },
   {
@@ -25,11 +27,13 @@ const products = [
       "Simulate the IELTS Speaking test with an AI examiner. Receive detailed band-score feedback on fluency, vocabulary, grammar and pronunciation.",
     icon: Mic,
     path: "/novaielts",
-    glowColor: "from-rose-400 to-orange-500",
-    iconGlow: "shadow-rose-500/40",
-    borderGlow: "hover:border-rose-500/50",
-    iconBg: "bg-rose-500/15 text-rose-400",
-    delay: "0.15s",
+    accent: "rose",
+    borderColor: "border-l-rose-400",
+    iconBg: "bg-rose-500/15 text-rose-400 shadow-rose-500/30",
+    hoverBorder: "group-hover:border-l-rose-400",
+    hoverText: "group-hover:text-rose-400",
+    glowColor: "group-hover:shadow-[0_0_30px_rgba(251,113,133,0.15)]",
+    delay: "0.1s",
   },
   {
     key: "novapatient",
@@ -39,11 +43,13 @@ const products = [
       "Practice history taking with realistic AI patients. Ideal for medical students and doctors preparing for clinical examinations.",
     icon: Stethoscope,
     path: "/novapatient",
-    glowColor: "from-violet-400 to-indigo-500",
-    iconGlow: "shadow-violet-500/40",
-    borderGlow: "hover:border-violet-500/50",
-    iconBg: "bg-violet-500/15 text-violet-400",
-    delay: "0.3s",
+    accent: "violet",
+    borderColor: "border-l-violet-400",
+    iconBg: "bg-violet-500/15 text-violet-400 shadow-violet-500/30",
+    hoverBorder: "group-hover:border-l-violet-400",
+    hoverText: "group-hover:text-violet-400",
+    glowColor: "group-hover:shadow-[0_0_30px_rgba(167,139,250,0.15)]",
+    delay: "0.2s",
   },
 ];
 
@@ -51,81 +57,95 @@ const Index = () => {
   const navigate = useNavigate();
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#0a0b14]">
-      {/* Animated gradient background */}
-      <div
-        className="absolute inset-0 animate-gradient-shift"
-        style={{
-          background:
-            "radial-gradient(ellipse at 20% 50%, rgba(120, 60, 200, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(60, 200, 180, 0.1) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(200, 60, 120, 0.08) 0%, transparent 50%)",
-          backgroundSize: "200% 200%",
-        }}
-      />
+    <main className="relative min-h-screen overflow-hidden bg-[#06070e] noise-overlay">
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 grid-pattern pointer-events-none" />
 
-      {/* Floating glow orbs */}
-      <div className="absolute top-20 left-[15%] w-72 h-72 bg-purple-600/20 rounded-full blur-[120px] animate-float" />
-      <div className="absolute bottom-32 right-[10%] w-96 h-96 bg-teal-500/15 rounded-full blur-[140px] animate-float" style={{ animationDelay: "2s" }} />
-      <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-pink-500/10 rounded-full blur-[100px] animate-float" style={{ animationDelay: "4s" }} />
+      {/* Ambient glow - very subtle */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-purple-600/[0.07] rounded-full blur-[150px]" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-teal-500/[0.05] rounded-full blur-[120px]" />
 
       {/* Content */}
-      <div className="relative z-10">
+      <div className="relative z-10 flex flex-col min-h-screen">
         {/* Hero */}
-        <section className="flex flex-col items-center pt-20 pb-14 px-4">
-          <img
-            src={novateLogo}
-            alt="Novate Persona"
-            className="w-28 h-28 md:w-36 md:h-36 object-contain mb-8 drop-shadow-[0_0_30px_rgba(139,92,246,0.3)]"
-          />
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-center gradient-text leading-tight pb-1">
-            Novate Persona
+        <section className="flex flex-col items-center pt-24 md:pt-32 pb-20 px-4">
+          {/* Logo with glow ring */}
+          <div className="relative mb-10">
+            <div className="absolute inset-0 rounded-full glow-ring" />
+            <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-[#06070e] flex items-center justify-center ring-1 ring-white/10">
+              <img
+                src={novateLogo}
+                alt="Novate Persona"
+                className="w-full h-full object-contain logo-blend"
+              />
+            </div>
+          </div>
+
+          {/* Heading with word accents */}
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter text-center leading-[0.95] mb-6">
+            <span className="text-white">Novate</span>{" "}
+            <span className="gradient-text">Persona</span>
           </h1>
-          <p className="mt-4 max-w-lg text-center text-slate-400 text-lg leading-relaxed">
+
+          <p className="max-w-md text-center text-slate-500 text-base md:text-lg leading-relaxed animate-fade-in-up" style={{ animationDelay: "0.2s", opacity: 0 }}>
             AI-powered practice partners for language, exams &amp; clinical skills.
-            <br className="hidden sm:block" />
-            Choose your persona and start learning.
           </p>
         </section>
 
-        {/* Product Cards */}
-        <section className="max-w-5xl mx-auto px-4 pb-24 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Product Panels */}
+        <section className="max-w-3xl w-full mx-auto px-4 pb-24 flex flex-col gap-px">
           {products.map((p) => {
             const Icon = p.icon;
             return (
               <div
                 key={p.key}
                 onClick={() => navigate(p.path)}
-                className={`group glass-card rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl ${p.borderGlow} animate-fade-in-up`}
+                className={`group glass-card cursor-pointer border-l-2 border-l-transparent ${p.hoverBorder} transition-all duration-500 ${p.glowColor} animate-fade-in-up`}
                 style={{ animationDelay: p.delay, opacity: 0 }}
               >
-                {/* Top glow line */}
-                <div className={`h-0.5 w-16 mb-6 rounded-full bg-gradient-to-r ${p.glowColor} opacity-80 group-hover:w-24 group-hover:opacity-100 transition-all duration-300`} />
+                <div className="flex items-center gap-4 md:gap-6 px-6 py-5 md:px-8 md:py-6">
+                  {/* Icon */}
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg flex items-center justify-center shrink-0 ${p.iconBg} shadow-lg transition-all duration-300`}>
+                    <Icon className="w-5 h-5 md:w-6 md:h-6" />
+                  </div>
 
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${p.iconBg} shadow-lg ${p.iconGlow} group-hover:animate-glow-pulse`}>
-                  <Icon className="w-6 h-6" />
-                </div>
+                  {/* Text */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <h3 className={`text-lg md:text-xl font-bold text-white/90 ${p.hoverText} transition-colors duration-300`}>
+                        {p.title}
+                      </h3>
+                      <span className="text-xs text-slate-600 hidden sm:inline">
+                        {p.subtitle}
+                      </span>
+                    </div>
+                    {/* Description - reveals on hover */}
+                    <div className="max-h-0 overflow-hidden opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-500 ease-out">
+                      <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                        {p.description}
+                      </p>
+                    </div>
+                  </div>
 
-                <h3 className="text-xl font-bold text-white mb-1 group-hover:text-white/90 transition-colors">
-                  {p.title}
-                </h3>
-                <p className="text-sm font-medium text-slate-400 mb-3">
-                  {p.subtitle}
-                </p>
-                <p className="text-sm text-slate-500 leading-relaxed mb-5">
-                  {p.description}
-                </p>
-
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-300 group-hover:text-white transition-colors">
-                  Launch
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  {/* Arrow */}
+                  <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-white/70 group-hover:translate-x-1 transition-all duration-300 shrink-0" />
                 </div>
               </div>
             );
           })}
         </section>
 
+        {/* Spacer */}
+        <div className="flex-1" />
+
         {/* Footer */}
-        <footer className="text-center pb-8 text-xs text-slate-600">
-          © 2026 Novate Persona. All rights reserved.
+        <footer className="text-center pb-8 px-4">
+          <div className="inline-block">
+            <span className="text-xs text-slate-600 tracking-wide">
+              Built by <span className="gradient-text font-medium">Novate</span>
+            </span>
+            <div className="h-px w-full mt-1 bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" />
+          </div>
         </footer>
       </div>
     </main>
