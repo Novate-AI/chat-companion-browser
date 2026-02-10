@@ -294,7 +294,7 @@ const IELTSChat = () => {
           setPhase("part1");
           questionIndexRef.current = 0;
           // After AI finishes speaking, start user response window
-          waitForSpeechThenStartTimer(17);
+          waitForSpeechThenStartTimer(20);
         }, 2500);
         break;
       }
@@ -321,8 +321,8 @@ const IELTSChat = () => {
           });
         } else {
           questionIndexRef.current = nextIdx;
-          sendExaminerMessage(`Ask this question naturally: ${part1DataRef.current.questions[nextIdx]}`);
-          waitForSpeechThenStartTimer(17);
+          sendExaminerMessage(`Say exactly: ${part1DataRef.current.questions[nextIdx]}`);
+          waitForSpeechThenStartTimer(20);
         }
         break;
       }
@@ -347,7 +347,7 @@ const IELTSChat = () => {
           sendExaminerMessage("Say exactly: That is the end of the speaking test. Thank you very much for your time. I hope you did well. Goodbye.");
         } else {
           questionIndexRef.current = nextIdx;
-          sendExaminerMessage(`Ask this question naturally: ${part3QuestionsRef.current[nextIdx]}`);
+          sendExaminerMessage(`Say exactly: ${part3QuestionsRef.current[nextIdx]}`);
           waitForSpeechThenStartTimer(22);
         }
         break;
