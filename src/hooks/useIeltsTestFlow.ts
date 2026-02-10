@@ -52,6 +52,13 @@ export function useIeltsTestFlow() {
   const [selectedTheme] = useState(() => PART1_THEMES[Math.floor(Math.random() * PART1_THEMES.length)]);
   const [selectedPart2Index] = useState(() => Math.floor(Math.random() * 6));
 
+  const phaseRef = useRef<IeltsPhase>(phase);
+  const questionIndexRef = useRef(questionIndex);
+
+  // Keep refs in sync with state
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { questionIndexRef.current = questionIndex; }, [questionIndex]);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onTimerExpireRef = useRef<(() => void) | null>(null);
 
@@ -98,8 +105,10 @@ export function useIeltsTestFlow() {
   }, [stopTimer]);
 
   const advancePhase = useCallback((): IeltsPhase => {
+    const currentPhase = phaseRef.current;
+    const currentQIndex = questionIndexRef.current;
     let next: IeltsPhase;
-    switch (phase) {
+    switch (currentPhase) {
       case "INTRO":
         next = "ASK_NAME";
         break;
@@ -118,14 +127,17 @@ export function useIeltsTestFlow() {
       case "PART1_INTRO":
         next = "PART1_QUESTION";
         setQuestionIndex(0);
+        questionIndexRef.current = 0;
         break;
       case "PART1_QUESTION":
-        if (questionIndex < 11) {
+        if (currentQIndex < 11) {
           setQuestionIndex((i) => i + 1);
+          questionIndexRef.current = currentQIndex + 1;
           next = "PART1_QUESTION";
         } else {
           next = "PART2_INTRO";
           setQuestionIndex(0);
+          questionIndexRef.current = 0;
         }
         break;
       case "PART2_INTRO":
@@ -137,14 +149,17 @@ export function useIeltsTestFlow() {
       case "PART2_SPEAK":
         next = "PART3_INTRO";
         setQuestionIndex(0);
+        questionIndexRef.current = 0;
         break;
       case "PART3_INTRO":
         next = "PART3_QUESTION";
         setQuestionIndex(0);
+        questionIndexRef.current = 0;
         break;
       case "PART3_QUESTION":
-        if (questionIndex < 5) {
+        if (currentQIndex < 5) {
           setQuestionIndex((i) => i + 1);
+          questionIndexRef.current = currentQIndex + 1;
           next = "PART3_QUESTION";
         } else {
           next = "CONCLUSION";
@@ -158,8 +173,9 @@ export function useIeltsTestFlow() {
         next = "CONCLUSION";
     }
     setPhase(next);
+    phaseRef.current = next;
     return next;
-  }, [phase, questionIndex]);
+  }, []);
 
   const getPhaseLabel = (): string => {
     switch (phase) {
