@@ -163,7 +163,7 @@ const IELTSChat = () => {
   const startUserResponseWindow = (seconds: number) => {
     // Start mic automatically
     setTimeout(() => {
-      if (micSupported && !isListening) startListening();
+      if (micSupported) startListening();
     }, 500);
 
     startCountdown(seconds, "Time remaining", () => {
