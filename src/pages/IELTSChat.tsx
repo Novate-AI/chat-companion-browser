@@ -78,11 +78,11 @@ const IELTSChat = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleUserResponseRef = useRef<(input: string) => void>(null as any);
 
-  // Voice recognition callback
+  // Voice recognition callback - fires on every final speech phrase
   const onVoiceResult = useCallback((transcript: string) => {
     if (inTimedWindowRef.current) {
-      // In a timed window — just store, timer expiry will collect it
-      pendingTranscriptRef.current = transcript;
+      // In a timed window — accumulate, timer expiry will collect it
+      pendingTranscriptRef.current += (pendingTranscriptRef.current ? " " : "") + transcript;
     } else {
       // Non-timed phase (intro, name, origin, id-check) — advance immediately
       handleUserResponseRef.current?.(transcript);
