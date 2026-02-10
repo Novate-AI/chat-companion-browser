@@ -294,7 +294,7 @@ const IELTSChat = () => {
           setPhase("part1");
           questionIndexRef.current = 0;
           // After AI finishes speaking, start user response window
-          waitForSpeechThenStartTimer(17);
+          waitForSpeechThenStartTimer(20);
         }, 2500);
         break;
       }
@@ -321,8 +321,8 @@ const IELTSChat = () => {
           });
         } else {
           questionIndexRef.current = nextIdx;
-          sendExaminerMessage(`Ask this question naturally: ${part1DataRef.current.questions[nextIdx]}`);
-          waitForSpeechThenStartTimer(17);
+          sendExaminerMessage(`Say exactly: ${part1DataRef.current.questions[nextIdx]}`);
+          waitForSpeechThenStartTimer(20);
         }
         break;
       }
@@ -331,10 +331,10 @@ const IELTSChat = () => {
         setPhase("part3-intro");
         questionIndexRef.current = 0;
         sendExaminerMessage(
-          `Say: Thank you. Now we will move on to Part 3 of the speaking test. In this part, I'd like to discuss some more general questions related to the topic we talked about in Part 2. ${part3QuestionsRef.current[0]}`
+          `Say exactly: Thank you. Now we will move on to Part 3 of the speaking test. In this part, I'd like to discuss some more general questions related to the topic we talked about in Part 2. ${part3QuestionsRef.current[0]}`
         );
         setPhase("part3");
-        waitForSpeechThenStartTimer(22);
+        waitForSpeechThenStartTimer(25);
         break;
       }
       case "part3": {
@@ -347,8 +347,8 @@ const IELTSChat = () => {
           sendExaminerMessage("Say exactly: That is the end of the speaking test. Thank you very much for your time. I hope you did well. Goodbye.");
         } else {
           questionIndexRef.current = nextIdx;
-          sendExaminerMessage(`Ask this question naturally: ${part3QuestionsRef.current[nextIdx]}`);
-          waitForSpeechThenStartTimer(22);
+          sendExaminerMessage(`Say exactly: ${part3QuestionsRef.current[nextIdx]}`);
+          waitForSpeechThenStartTimer(25);
         }
         break;
       }
