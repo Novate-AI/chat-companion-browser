@@ -1,92 +1,58 @@
 
+# Fix IELTS Mic Persistence, Timer Display, and Text/Audio Mismatch
 
-# Fix Voice Lag -- Stream Audio While Chat is Streaming
+## Issues to Fix
 
-## Problem
+1. **Part 1: Mic stops after one utterance** -- The speech recognition uses `continuous: false`, so the mic deactivates once the user pauses. Need to keep it alive for the full 20 seconds.
+2. **Part 1: Timer should be 20 seconds** -- Currently set to 17 seconds.
+3. **Part 2: Mic stops after one utterance** -- Same issue; mic must stay active for the full 2 minutes.
+4. **Part 3: Text/audio mismatch** -- The AI is asked to "ask this question naturally," which means it rephrases the question. The text bubble shows one wording while the audio speaks a different wording. Both come from the same stream, so the real fix is to remove the AI's freedom to rephrase -- pass the exact question text directly.
 
-The voice playback lags behind the chat text because of two sequential bottlenecks:
-1. The app waits for the **entire chat response** to finish streaming before sending text to ElevenLabs
-2. The ElevenLabs call waits for the **entire audio file** to be generated before playback begins
+## Changes
 
-This creates a noticeable delay: chat finishes, then silence, then voice starts seconds later.
+### 1. `src/hooks/useSpeechRecognition.ts` -- Enable continuous listening with auto-restart
 
-## Solution
+- Set `continuous: true` so the mic stays open across pauses
+- Instead of calling `onResult` and stopping, accumulate transcript text
+- On `onend`, auto-restart the recognition (browsers often stop it after silence) so it keeps listening until explicitly stopped
+- The hook will collect all spoken text and only call `onResult` with the full accumulated transcript when `stop()` is called
 
-Implement **chunked TTS** so audio starts playing while the chat is still streaming, and use ElevenLabs' streaming audio endpoint so playback begins before the full audio is generated.
+### 2. `src/pages/IELTSChat.tsx` -- Fix timers and remove AI rephrasing
 
-## What Changes
+- **Part 1**: Change timer from 17s to 20s
+- **Part 3**: Keep timer at 22s (within the 20-25s range)
+- **Text/audio mismatch fix**: For Part 1 and Part 3 questions, instead of telling the AI to "ask this question naturally," use `"Say exactly: [question]"`. This ensures the text displayed matches the audio exactly.
+- **Mic handling**: When the timer expires, call `stop()` on speech recognition which will flush accumulated text as the user's response, then advance.
+- **Part 2**: The `startUserResponseWindowLong` function already starts the mic -- with continuous mode enabled, it will now stay active for the full 2 minutes.
 
-### 1. Start TTS earlier with sentence chunking (`src/pages/Chat.tsx`)
+## Technical Details
 
-Instead of waiting for the full response, detect complete sentences as they stream in and send each sentence to TTS immediately.
+### Speech Recognition (continuous mode)
 
-- Track which text has already been sent to TTS
-- As new content streams in, extract complete sentences (split on `.` `!` `?`)
-- Queue each sentence for TTS playback in order
-- Remove the "wait for isLoading to flip" pattern
+The current hook creates a new `SpeechRecognition` instance with `continuous: false`. The browser fires one `onresult` event and stops. The fix:
 
-### 2. Stream audio from ElevenLabs (`supabase/functions/elevenlabs-tts/index.ts`)
+- Set `continuous: true` and `interimResults: false`
+- On each `onresult` event, append the new transcript to an accumulated ref
+- On `onend` (which browsers fire after extended silence even in continuous mode), auto-restart unless explicitly stopped
+- When `stop()` is called, flush the accumulated transcript via `onResult` callback, then reset
 
-Switch from buffering the full audio to streaming it through:
+### Exact question text (no AI rephrasing)
 
-- Use ElevenLabs streaming endpoint (same URL, just pipe the response body directly instead of buffering with `arrayBuffer()`)
-- Return the audio stream to the client as it arrives
-- This alone cuts perceived latency by 1-3 seconds
+Current instruction for Part 1 Q2+:
+```
+Ask this question naturally: [question]
+```
 
-### 3. Play audio as it streams (`src/hooks/useSpeechSynthesis.ts`)
+Changed to:
+```
+Say exactly: [question]
+```
 
-Update the hook to support:
-
-- A **queue system** for multiple text chunks (sentences) arriving over time
-- Play chunks sequentially -- when one finishes, start the next
-- Use `MediaSource` API or sequential `Audio` elements for gapless playback
-- Keep the fallback to browser speech if ElevenLabs fails
+This eliminates the mismatch between displayed text and spoken audio, since both come from the same AI stream.
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/functions/elevenlabs-tts/index.ts` | Stream audio response instead of buffering the full file |
-| `src/hooks/useSpeechSynthesis.ts` | Add a sentence queue system -- accept chunks, play them sequentially |
-| `src/pages/Chat.tsx` | Send sentences to TTS as they stream in, rather than waiting for the full response |
-
-## Technical Details
-
-**Sentence chunking logic (Chat.tsx):**
-
-The `processStream` function already assembles text token-by-token. We add a tracker for the last TTS position, and after each token, check if a new complete sentence has formed:
-
-```text
-spokenUpTo = 0
-onNewContent(fullText):
-  remaining = fullText.slice(spokenUpTo)
-  sentences = split remaining on sentence boundaries (. ! ?)
-  for each complete sentence (not the last partial one):
-    queue sentence for TTS
-    spokenUpTo += sentence.length
-```
-
-**Audio queue (useSpeechSynthesis.ts):**
-
-```text
-queue = []
-isPlaying = false
-
-speakQueued(text):
-  queue.push(text)
-  if not isPlaying: playNext()
-
-playNext():
-  if queue is empty: isPlaying = false; return
-  isPlaying = true
-  chunk = queue.shift()
-  fetch TTS for chunk
-  play audio
-  on audio ended: playNext()
-```
-
-**Edge function streaming:**
-
-Replace `await response.arrayBuffer()` with directly piping `response.body` to the client response. This means audio bytes start flowing to the browser as soon as ElevenLabs begins generating.
-
-No new dependencies needed. ElevenLabs API usage stays the same (same endpoint, same model).
+| `src/hooks/useSpeechRecognition.ts` | Enable continuous mode with auto-restart; accumulate transcript; flush on stop |
+| `src/pages/IELTSChat.tsx` | Part 1 timer 17s to 20s; use "Say exactly" for Part 1 and Part 3 questions; keep mic active throughout response windows |
