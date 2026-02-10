@@ -566,6 +566,11 @@ const IELTSChat = () => {
           isListening={isListening}
           onMicToggle={handleMicToggle}
           micSupported={micSupported}
+          autoMicMessage={
+            ["part1", "part2-speak", "part3"].includes(phaseDisplay)
+              ? "🎙️ Mic is auto-activated. Please speak while the recording is in progress."
+              : undefined
+          }
         />
       </div>
 
