@@ -47,6 +47,9 @@ const IeltsChat = () => {
   // Use ref to avoid stale closure in onVoiceResult
   const sendMessageRef = useRef<(input: string) => void>(() => {});
 
+  // Use ref to always call the latest triggerAIMessage from sendMessage
+  const triggerAIMessageRef = useRef<(targetPhase: IeltsPhase) => void>(() => {});
+
   const onVoiceResult = useCallback((transcript: string) => {
     sendMessageRef.current(transcript);
   }, []);
@@ -227,14 +230,19 @@ const IeltsChat = () => {
       return; // Test already complete
     }
 
-    triggerAIMessage(nextPhase);
+    triggerAIMessageRef.current(nextPhase);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, questionIndex, advancePhase, stopTimer, isListening, stopListening]);
+  }, [phase, advancePhase, stopTimer, isListening, stopListening]);
 
   // Keep sendMessageRef always pointing to latest sendMessage
   useEffect(() => {
     sendMessageRef.current = sendMessage;
   }, [sendMessage]);
+
+  // Keep triggerAIMessageRef always pointing to latest triggerAIMessage
+  useEffect(() => {
+    triggerAIMessageRef.current = triggerAIMessage;
+  });
 
   const processStream = async (body: ReadableStream<Uint8Array>, assistantSoFar: string): Promise<string> => {
     const reader = body.getReader();
