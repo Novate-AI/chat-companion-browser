@@ -16,12 +16,14 @@ export function useSpeechRecognition({ lang, onResult, continuous = false }: Use
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const accumulatedRef = useRef("");
+  const isListeningRef = useRef(false);
 
   const isSupported = typeof window !== "undefined" &&
     ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
 
   const start = useCallback(() => {
     if (!isSupported) return;
+    if (isListeningRef.current) return; // already listening
     accumulatedRef.current = "";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -47,7 +49,7 @@ export function useSpeechRecognition({ lang, onResult, continuous = false }: Use
     };
 
     recognition.onend = () => {
-      if (continuous && recognitionRef.current) {
+      if (continuous && isListeningRef.current) {
         // Auto-restart to keep mic open for the full window
         try {
           recognition.start();
@@ -59,7 +61,7 @@ export function useSpeechRecognition({ lang, onResult, continuous = false }: Use
       }
     };
     recognition.onerror = (e: { error: string }) => {
-      if (e.error === "no-speech" && continuous && recognitionRef.current) {
+      if (e.error === "no-speech" && continuous && isListeningRef.current) {
         // Restart on no-speech in continuous mode
         try {
           recognition.start();
@@ -72,13 +74,15 @@ export function useSpeechRecognition({ lang, onResult, continuous = false }: Use
     };
 
     recognitionRef.current = recognition;
+    isListeningRef.current = true;
     recognition.start();
     setIsListening(true);
   }, [lang, onResult, isSupported, continuous]);
 
   const stop = useCallback(() => {
+    isListeningRef.current = false; // prevent auto-restart BEFORE stopping
     const rec = recognitionRef.current;
-    recognitionRef.current = null; // prevent auto-restart
+    recognitionRef.current = null;
     rec?.stop();
     setIsListening(false);
 
