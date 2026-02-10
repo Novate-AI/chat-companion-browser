@@ -158,12 +158,14 @@ const IELTSChat = () => {
 
   // Start auto-advance timer for user response
   const startUserResponseWindow = (seconds: number) => {
+    // Start mic automatically
     setTimeout(() => {
-      if (micSupported) startListening();
+      if (micSupported && !isListening) startListening();
     }, 500);
 
     startCountdown(seconds, "Time remaining", () => {
-      stopListening(false);
+      // Time's up - stop mic and advance
+      stopListening();
       advanceAfterUserResponse("(no response - time expired)");
     });
   };
@@ -253,7 +255,7 @@ const IELTSChat = () => {
   const handleUserResponse = (input: string) => {
     if (isLoading || testFinished) return;
     stopAllTimers();
-    stopListening(false);
+    stopListening();
 
     const userMsg: Msg = { role: "user", content: input };
     setMessages((prev) => [...prev, userMsg]);
@@ -292,7 +294,7 @@ const IELTSChat = () => {
           setPhase("part1");
           questionIndexRef.current = 0;
           // After AI finishes speaking, start user response window
-          waitForSpeechThenStartTimer(20);
+          waitForSpeechThenStartTimer(17);
         }, 2500);
         break;
       }
@@ -319,8 +321,8 @@ const IELTSChat = () => {
           });
         } else {
           questionIndexRef.current = nextIdx;
-          sendExaminerMessage(`Say exactly: ${part1DataRef.current.questions[nextIdx]}`);
-          waitForSpeechThenStartTimer(20);
+          sendExaminerMessage(`Ask this question naturally: ${part1DataRef.current.questions[nextIdx]}`);
+          waitForSpeechThenStartTimer(17);
         }
         break;
       }
@@ -345,7 +347,7 @@ const IELTSChat = () => {
           sendExaminerMessage("Say exactly: That is the end of the speaking test. Thank you very much for your time. I hope you did well. Goodbye.");
         } else {
           questionIndexRef.current = nextIdx;
-          sendExaminerMessage(`Say exactly: ${part3QuestionsRef.current[nextIdx]}`);
+          sendExaminerMessage(`Ask this question naturally: ${part3QuestionsRef.current[nextIdx]}`);
           waitForSpeechThenStartTimer(22);
         }
         break;
@@ -388,7 +390,7 @@ const IELTSChat = () => {
   const startUserResponseWindowLong = (seconds: number) => {
     if (micSupported) startListening();
     startCountdown(seconds, "Speaking time", () => {
-      stopListening(false);
+      stopListening();
       advanceAfterUserResponse("(speaking time ended)");
     });
   };
