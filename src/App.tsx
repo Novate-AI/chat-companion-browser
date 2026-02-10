@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Novatutor from "./pages/Novatutor";
 import Chat from "./pages/Chat";
+import NovaIELTS from "./pages/NovaIELTS";
+import IELTSChat from "./pages/IELTSChat";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -20,6 +22,8 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/novatutor" element={<Novatutor />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/novaielts" element={<NovaIELTS />} />
+          <Route path="/ielts-chat" element={<IELTSChat />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
