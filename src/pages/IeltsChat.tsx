@@ -122,7 +122,7 @@ const IeltsChat = () => {
 
   // Detect mic turning off without speech captured — auto-advance to next question
   useEffect(() => {
-    if (wasListeningRef.current && !isListening && !isLoading) {
+    if (wasListeningRef.current && !isListening && !isLoading && !isSpeaking) {
       // Mic just turned off. Check if user speech was NOT captured.
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -260,6 +260,7 @@ const IeltsChat = () => {
     const decoder = new TextDecoder();
     let textBuffer = "";
     let streamDone = false;
+    let myMessageIndex = -1;
 
     while (!streamDone) {
       const { done, value } = await reader.read();
@@ -282,11 +283,11 @@ const IeltsChat = () => {
             assistantSoFar += content;
             const snapshot = assistantSoFar;
             setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              if (last?.role === "assistant") {
-                return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: snapshot } : m));
+              if (myMessageIndex === -1) {
+                myMessageIndex = prev.length;
+                return [...prev, { role: "assistant", content: snapshot }];
               }
-              return [...prev, { role: "assistant", content: snapshot }];
+              return prev.map((m, i) => (i === myMessageIndex ? { ...m, content: snapshot } : m));
             });
             checkAndQueueSentences(snapshot);
           }
