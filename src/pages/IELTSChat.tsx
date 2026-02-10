@@ -72,17 +72,14 @@ const IELTSChat = () => {
   // Track test completion
   const [testFinished, setTestFinished] = useState(false);
 
-  // Voice recognition - in continuous mode, result only fires on stop()
+  // Voice recognition
   const onVoiceResult = useCallback((transcript: string) => {
-    // Don't auto-advance; just add the transcript as a user message
-    if (transcript && transcript !== "(no response - time expired)") {
-      setMessages((prev) => [...prev, { role: "user", content: transcript }]);
-    }
+    handleUserResponse(transcript);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { isListening, start: startListening, stop: stopListening, isSupported: micSupported } =
-    useSpeechRecognition({ lang: "en-US", onResult: onVoiceResult, continuous: true });
+    useSpeechRecognition({ lang: "en-US", onResult: onVoiceResult });
 
   // Auto-scroll
   useEffect(() => {
@@ -163,13 +160,13 @@ const IELTSChat = () => {
   const startUserResponseWindow = (seconds: number) => {
     // Start mic automatically
     setTimeout(() => {
-      if (micSupported) startListening();
+      if (micSupported && !isListening) startListening();
     }, 500);
 
     startCountdown(seconds, "Time remaining", () => {
-      // Time's up - stop mic (flushes accumulated speech as a message) then advance
+      // Time's up - stop mic and advance
       stopListening();
-      setTimeout(() => advanceAfterUserResponse("(timer expired)"), 300);
+      advanceAfterUserResponse("(no response - time expired)");
     });
   };
 
@@ -254,22 +251,15 @@ const IELTSChat = () => {
     return assistantSoFar;
   };
 
-  // Handle typed user input
+  // Handle user's response and advance the test
   const handleUserResponse = (input: string) => {
     if (isLoading || testFinished) return;
-    const phase = phaseRef.current;
-
-    // During timed phases (part1, part2-speak, part3), typed input just adds a message
-    // but does NOT stop the timer or advance — the timer handles advancement
-    if (phase === "part1" || phase === "part2-speak" || phase === "part3") {
-      setMessages((prev) => [...prev, { role: "user", content: input }]);
-      return;
-    }
-
-    // For intro/identity phases, advance immediately
     stopAllTimers();
     stopListening();
-    setMessages((prev) => [...prev, { role: "user", content: input }]);
+
+    const userMsg: Msg = { role: "user", content: input };
+    setMessages((prev) => [...prev, userMsg]);
+
     advanceAfterUserResponse(input);
   };
 
