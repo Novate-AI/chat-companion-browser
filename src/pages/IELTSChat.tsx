@@ -255,7 +255,7 @@ const IELTSChat = () => {
   const handleUserResponse = (input: string) => {
     if (isLoading || testFinished) return;
     stopAllTimers();
-    stopListening();
+    stopListening(false);
 
     const userMsg: Msg = { role: "user", content: input };
     setMessages((prev) => [...prev, userMsg]);

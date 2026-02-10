@@ -68,7 +68,7 @@ export function useSpeechRecognition({ lang, onResult }: UseSpeechRecognitionOpt
     setIsListening(true);
   }, [lang, isSupported]);
 
-  const stop = useCallback(() => {
+  const stop = useCallback((flush = true) => {
     stoppedRef.current = true;
     try {
       recognitionRef.current?.stop();
@@ -77,10 +77,12 @@ export function useSpeechRecognition({ lang, onResult }: UseSpeechRecognitionOpt
     }
     setIsListening(false);
 
-    // Flush accumulated transcript
-    const text = accumulatedRef.current.trim();
-    if (text) {
-      onResultRef.current(text);
+    // Flush accumulated transcript only if requested
+    if (flush) {
+      const text = accumulatedRef.current.trim();
+      if (text) {
+        onResultRef.current(text);
+      }
     }
     accumulatedRef.current = "";
   }, []);
