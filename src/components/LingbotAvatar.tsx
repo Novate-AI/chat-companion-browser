@@ -9,11 +9,11 @@ interface LingbotAvatarProps {
 export function LingbotAvatar({ isSpeaking, size = "lg" }: LingbotAvatarProps) {
   return (
     <div className={cn(
-      "relative rounded-full overflow-hidden border-4 border-primary/20 shadow-lg",
+      "relative",
       size === "lg" ? "w-32 h-32" : "w-10 h-10",
-      isSpeaking && "ring-4 ring-accent animate-pulse"
+      isSpeaking && "animate-pulse"
     )}>
-      <img src={lingbotImg} alt="Novatutor" className="w-full h-full object-cover" />
+      <img src={lingbotImg} alt="NovaPatient" className="w-full h-full object-contain" />
     </div>
   );
 }
