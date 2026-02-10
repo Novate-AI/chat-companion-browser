@@ -158,14 +158,12 @@ const IELTSChat = () => {
 
   // Start auto-advance timer for user response
   const startUserResponseWindow = (seconds: number) => {
-    // Start mic automatically
     setTimeout(() => {
-      if (micSupported && !isListening) startListening();
+      if (micSupported) startListening();
     }, 500);
 
     startCountdown(seconds, "Time remaining", () => {
-      // Time's up - stop mic and advance
-      stopListening();
+      stopListening(false);
       advanceAfterUserResponse("(no response - time expired)");
     });
   };
@@ -390,7 +388,7 @@ const IELTSChat = () => {
   const startUserResponseWindowLong = (seconds: number) => {
     if (micSupported) startListening();
     startCountdown(seconds, "Speaking time", () => {
-      stopListening();
+      stopListening(false);
       advanceAfterUserResponse("(speaking time ended)");
     });
   };
