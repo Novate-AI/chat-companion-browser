@@ -1,5 +1,28 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
+// Known male voice name patterns across browsers
+const MALE_VOICE_PATTERNS = [
+  "male", "david", "james", "mark", "daniel", "george", "thomas", "guy",
+  "richard", "alex", "fred", "tom", "bruce", "charles", "reed", "rishi",
+  "aaron", "gordon", "liam", "oliver",
+];
+
+const FEMALE_VOICE_PATTERNS = [
+  "female", "zira", "hazel", "susan", "samantha", "karen", "moira",
+  "tessa", "fiona", "victoria", "alice", "sara", "laura", "kate",
+  "catherine", "ellen", "martha",
+];
+
+function looksLikeMaleVoice(name: string): boolean {
+  const lower = name.toLowerCase();
+  return MALE_VOICE_PATTERNS.some((p) => lower.includes(p));
+}
+
+function looksLikeFemaleVoice(name: string): boolean {
+  const lower = name.toLowerCase();
+  return FEMALE_VOICE_PATTERNS.some((p) => lower.includes(p));
+}
+
 function scoreVoice(voice: SpeechSynthesisVoice, targetLang: string): number {
   let score = 0;
   const baseLang = targetLang.split("-")[0].toLowerCase();
@@ -13,6 +36,10 @@ function scoreVoice(voice: SpeechSynthesisVoice, targetLang: string): number {
   if (name.includes("microsoft")) score += 3;
   if (name.includes("natural")) score += 2;
   if (!voice.localService) score += 1;
+
+  // Strongly prefer male voices for Tom Holland persona
+  if (looksLikeMaleVoice(name)) score += 15;
+  if (looksLikeFemaleVoice(name)) score -= 10;
 
   return score;
 }
