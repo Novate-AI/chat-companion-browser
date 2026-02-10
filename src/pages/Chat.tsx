@@ -34,7 +34,8 @@ const Chat = () => {
   const [autoIntroSent, setAutoIntroSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { isSpeaking, speak, stop: stopSpeaking } = useSpeechSynthesis(lang.speechCode);
+  const { isSpeaking, speak, speakQueued, stop: stopSpeaking } = useSpeechSynthesis(lang.speechCode);
+  const spokenUpToRef = useRef(0);
 
   const onVoiceResult = useCallback((transcript: string) => {
     sendMessage(transcript);
@@ -58,19 +59,31 @@ const Chat = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-play voice when assistant finishes (only speakable text)
-  const lastAssistantRef = useRef<string>("");
-  const wasLoadingRef = useRef(false);
-  useEffect(() => {
-    if (wasLoadingRef.current && !isLoading && messages.length > 0) {
-      const last = messages[messages.length - 1];
-      if (last.role === "assistant" && last.content !== lastAssistantRef.current) {
-        lastAssistantRef.current = last.content;
-        speak(getSpeakableText(last.content));
+  // Sentence chunking: extract complete sentences and queue for TTS
+  const checkAndQueueSentences = useCallback((fullText: string) => {
+    const speakable = getSpeakableText(fullText);
+    const remaining = speakable.slice(spokenUpToRef.current);
+    // Split on sentence-ending punctuation, keeping the delimiter
+    const parts = remaining.split(/(?<=[.!?])\s+/);
+    // Queue all complete sentences (all except the last partial one)
+    for (let i = 0; i < parts.length - 1; i++) {
+      const sentence = parts[i].trim();
+      if (sentence) {
+        speakQueued(sentence);
+        spokenUpToRef.current += parts[i].length + 1; // +1 for the split whitespace
       }
     }
-    wasLoadingRef.current = isLoading;
-  }, [isLoading, messages, speak]);
+  }, [speakQueued]);
+
+  // When stream finishes, flush any remaining text
+  const flushRemainingSpeech = useCallback((fullText: string) => {
+    const speakable = getSpeakableText(fullText);
+    const remaining = speakable.slice(spokenUpToRef.current).trim();
+    if (remaining) {
+      speakQueued(remaining);
+      spokenUpToRef.current = speakable.length;
+    }
+  }, [speakQueued]);
 
   // Detect native language
   useEffect(() => {
@@ -90,6 +103,8 @@ const Chat = () => {
 
   const triggerIntro = async () => {
     setIsLoading(true);
+    stopSpeaking();
+    spokenUpToRef.current = 0;
     let assistantSoFar = "";
     try {
       const resp = await fetch(CHAT_URL, {
@@ -101,7 +116,8 @@ const Chat = () => {
         body: JSON.stringify({ messages: [], language: langCode, nativeLanguage: null, showSuggestions: false }),
       });
       if (!resp.ok || !resp.body) throw new Error("Failed to connect");
-      await processStream(resp.body, assistantSoFar);
+      assistantSoFar = await processStream(resp.body, assistantSoFar);
+      flushRemainingSpeech(assistantSoFar);
     } catch (e) {
       console.error(e);
       toast({ title: "Error", description: "Could not reach the tutor. Try again.", variant: "destructive" });
@@ -114,6 +130,8 @@ const Chat = () => {
     const userMsg: Msg = { role: "user", content: input };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+    stopSpeaking();
+    spokenUpToRef.current = 0;
     let assistantSoFar = "";
     const allMessages = [...messages, userMsg];
 
@@ -130,7 +148,8 @@ const Chat = () => {
       if (resp.status === 429) { toast({ title: "Rate limited", description: "Too many requests.", variant: "destructive" }); setIsLoading(false); return; }
       if (resp.status === 402) { toast({ title: "Credits needed", description: "Please add credits.", variant: "destructive" }); setIsLoading(false); return; }
       if (!resp.ok || !resp.body) throw new Error("Failed to connect");
-      await processStream(resp.body, assistantSoFar);
+      assistantSoFar = await processStream(resp.body, assistantSoFar);
+      flushRemainingSpeech(assistantSoFar);
     } catch (e) {
       console.error(e);
       toast({ title: "Error", description: "Could not reach the tutor. Try again.", variant: "destructive" });
@@ -139,7 +158,7 @@ const Chat = () => {
     }
   };
 
-  const processStream = async (body: ReadableStream<Uint8Array>, assistantSoFar: string) => {
+  const processStream = async (body: ReadableStream<Uint8Array>, assistantSoFar: string): Promise<string> => {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let textBuffer = "";
@@ -172,6 +191,8 @@ const Chat = () => {
               }
               return [...prev, { role: "assistant", content: snapshot }];
             });
+            // Queue complete sentences for TTS as they stream in
+            checkAndQueueSentences(snapshot);
           }
         } catch {
           textBuffer = line + "\n" + textBuffer;
@@ -179,6 +200,7 @@ const Chat = () => {
         }
       }
     }
+    return assistantSoFar;
   };
 
   const handleMicToggle = () => {
