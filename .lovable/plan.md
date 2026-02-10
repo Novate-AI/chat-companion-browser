@@ -1,71 +1,67 @@
 
 
-# Lingbot World — Implementation Plan
+# Redesign: Futuristic Novate Persona Landing Page
 
 ## Overview
-Build a browser-based language tutor app where users chat (text or voice) with "Lingbot," a friendly AI language tutor. Uses the uploaded teacher image as the Lingbot character, browser-native Web Speech API for voice, and Lovable AI for tutoring intelligence.
+Transform the bland landing page into a sleek, modern, futuristic design with a dark theme, glowing accents, animated gradients, and glassmorphism cards.
 
-## What Gets Built
+## Design Direction
+- **Dark background** with subtle animated gradient mesh (deep navy/purple tones)
+- **Glassmorphism cards** with backdrop blur, semi-transparent backgrounds, and glowing border accents on hover
+- **Animated floating glow orbs** in the background for depth and movement
+- **Gradient text** on the main heading for a futuristic feel
+- **Staggered fade-in animations** on page load for cards
+- **Glowing icon containers** with each product's signature color
+- **Smooth hover effects** -- cards lift, borders glow, icons pulse
 
-### 1. Landing Page (Home Screen)
-- Lingbot character image displayed prominently
-- Language selector dropdown (Spanish, French, Mandarin, Japanese, German, Italian, Portuguese, Korean)
-- "Start Conversation" button
-- Clean, welcoming design with a language-learning theme
+## Changes
 
-### 2. Chat Page
-- Lingbot avatar at the top with a "speaking" animation indicator
-- Scrollable message area with chat bubbles (user on right, Lingbot on left)
-- Text input field with send button
-- Microphone button for voice input (uses browser SpeechRecognition API)
-- Lingbot speaks responses aloud (uses browser SpeechSynthesis API)
-- Visual indicators for mic active and Lingbot speaking states
+### 1. tailwind.config.ts
+- Add custom keyframes: `float`, `glow-pulse`, `fade-in-up` (staggered entrance), `gradient-shift` (background animation)
+- Add corresponding animation utilities
 
-### 3. AI Tutoring (via Lovable Cloud)
-- An edge function that receives user messages and the selected language
-- System prompt configuring Lingbot as a friendly language tutor that:
-  - Responds primarily in the target language
-  - Provides translations in parentheses for beginners
-  - Corrects mistakes gently
-  - Adapts difficulty based on conversation
-- Powered by Lovable AI (Gemini) — no extra API keys
+### 2. src/pages/Index.tsx (full rewrite)
+- Dark background with CSS animated gradient mesh
+- Floating decorative glow orbs (absolute-positioned, blurred colored divs)
+- Logo with a subtle glow/drop-shadow effect
+- Heading with a gradient text effect (transparent bg-clip)
+- Subtitle with a softer tone
+- Three glassmorphism product cards:
+  - Semi-transparent dark background with backdrop-blur
+  - Colored left border or top glow line matching product color
+  - Icon in a glowing circular container
+  - Hover: card lifts, border glows brighter, subtle scale
+  - Staggered entrance animation (delay per card)
+  - Arrow CTA animates on hover
+- Minimal footer with muted text
 
-### 4. Voice Features (Browser Native)
-- Speech-to-Text: Web SpeechRecognition API — user clicks mic, speaks, text appears
-- Text-to-Speech: Web SpeechSynthesis API — Lingbot's responses are read aloud using the language-appropriate voice
-- No external services or API keys required
-- Note: Works best in Chrome/Edge; limited support in some browsers
+### 3. src/index.css
+- Add a utility class for gradient text (`.gradient-text`)
+- Add glass card utility (`.glass-card`)
+
+## Visual Result
+A dark, immersive landing page that feels like a premium AI product -- clean typography, glowing accents, smooth animations, and glassmorphism depth. Simple but striking.
 
 ## Technical Details
 
-### New Files to Create
-- `src/pages/Chat.tsx` — Chat interface page
-- `src/components/LingbotAvatar.tsx` — Lingbot character display with speaking indicator
-- `src/components/ChatBubble.tsx` — Message bubble component
-- `src/components/ChatInput.tsx` — Text input + mic button
-- `src/components/LanguageSelector.tsx` — Language picker component
-- `src/hooks/useSpeechRecognition.ts` — Hook wrapping browser SpeechRecognition
-- `src/hooks/useSpeechSynthesis.ts` — Hook wrapping browser SpeechSynthesis
-- `src/lib/languages.ts` — Language list and config (names, codes, voice tags)
+**New Tailwind keyframes:**
+- `float`: gentle up/down float for background orbs
+- `glow-pulse`: opacity pulse for glow effects  
+- `fade-in-up`: translateY + opacity for card entrances
+- `gradient-shift`: background-position animation for the mesh gradient
 
-### Files to Modify
-- `src/pages/Index.tsx` — Replace with Lingbot landing page
-- `src/App.tsx` — Add /chat route
-- `index.html` — Update title to "Lingbot World"
-- `src/index.css` — Add custom colors for a friendly language-learning theme
+**Card structure (per product):**
+```text
++------------------------------------------+
+|  [glow top border - product color]       |
+|                                          |
+|  ( icon )   Title                        |
+|             Subtitle                     |
+|                                          |
+|  Description text...                     |
+|                                          |
+|  Launch ->                               |
++------------------------------------------+
+```
 
-### Backend (Lovable Cloud)
-- Enable Lovable Cloud
-- Create an edge function `chat` that:
-  - Receives `{ message, language, conversationHistory }`
-  - Calls Lovable AI with a language-tutor system prompt
-  - Returns the AI response text
-
-### Asset
-- Copy uploaded teacher image to `src/assets/lingbot.png`
-
-## Limitations to Be Aware Of
-- Browser Speech APIs have varying support — Chrome/Edge work best, Safari and Firefox have partial support
-- Voice quality is basic compared to ElevenLabs but perfectly functional
-- Speech recognition accuracy varies by language and browser
-
+**No new dependencies needed** -- pure Tailwind + CSS.
