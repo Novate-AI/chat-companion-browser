@@ -1,48 +1,65 @@
 
 
-# Fix: No Timers for Introduction, Timers Only Start at Part 1
+# Fix: AI Text Being Overwritten by Next Response
 
-## Problem
+## Root Cause
 
-1. **Introduction phases have unnecessary pending actions**: The intro phases (`INTRO`, `ASK_NAME`, `ASK_NICKNAME_ORIGIN`) schedule a `"mic_only"` pending action that waits for `isSpeaking` to go false. This adds latency since it depends on TTS state detection. There should be no timer and no pending action -- the system simply waits for the user to speak.
+The `processStream` function uses a flawed heuristic to update streaming messages: it checks if the last message is from the "assistant" and overwrites it. This means if two AI responses stream in quick succession (which happens during intro phases), the second response **replaces the text** of the first one.
 
-2. **Timers should only begin at Part 1**: Currently `ASK_ID` is treated as a timed phase. The ID check is still part of the introduction and should use the simple auto-advance pattern instead.
+The audio from the first response still plays because it was already queued in the TTS system before being overwritten.
 
-## Solution
+## Timeline of the Bug
 
-### `src/pages/IeltsChat.tsx`
+1. ASK_NAME triggers, AI streams "Hello my name is Tom..." -- text appears, audio queued
+2. Stream finishes, `isLoading` goes false
+3. Mic-off fallback or another trigger fires ASK_NICKNAME_ORIGIN
+4. New stream starts -- `processStream` sees last message is "assistant" and **overwrites** the "My name is Tom" text with "And what shall I call you..."
 
-**`schedulePostAIAction` (lines 211-239):**
-- Remove `INTRO`, `ASK_NAME`, `ASK_NICKNAME_ORIGIN` from the `waitForUserPhases` list and eliminate the `"mic_only"` action entirely
-- For these intro phases, set NO pending action at all -- the mic-off-without-speech `useEffect` (line 132) and `sendMessage` already handle advancing when the user speaks or toggles the mic
-- Move `ASK_ID` from the timed phases to the auto-advance phases (`ID_PAUSE` behavior: AI says "May I see your ID", then after speaking auto-advances to `ID_PAUSE` which says "Thank you")
-- The `"mic_only"` action type can be removed entirely since no phase uses it anymore
+## Fix
 
-**Updated `schedulePostAIAction` logic:**
+### Change 1: Track message ownership in `processStream` (`src/pages/IeltsChat.tsx`)
 
-| Phase | Action |
-|-------|--------|
-| `INTRO`, `ASK_NAME`, `ASK_NICKNAME_ORIGIN` | No pending action -- just wait for user to click mic |
-| `ASK_ID` | `auto_advance` -- AI asks for ID, then auto-advances to `ID_PAUSE` |
-| `ID_PAUSE`, `PART1_INTRO`, `PART2_INTRO`, `PART3_INTRO` | `auto_advance` -- AI speaks then moves on |
-| `PART1_QUESTION`, `PART2_SPEAK`, `PART3_QUESTION` | `mic_and_timer` -- timer starts after AI speaks |
-| `PART2_PREP` | `mic_and_timer` -- 60s prep timer |
-| `CONCLUSION` | Nothing |
+Instead of blindly checking if the last message is "assistant", use a local flag to track whether THIS stream has already created its message. This prevents one stream from overwriting another stream's message.
 
-**Pending action effect (lines 90-129):**
-- Remove the `"mic_only"` branch entirely
-- Remove `ASK_ID` from the `"mic_and_timer"` branch
+```
+processStream logic change:
+- Add local boolean: messageCreated = false
+- On first content chunk: ALWAYS append a new assistant message, set messageCreated = true
+- On subsequent chunks: find and update only the message created by this stream (use the message index captured when it was created)
+```
 
-**`pendingActionRef` type (line 45):**
-- Change from `"mic_only" | "mic_and_timer" | "auto_advance" | null` to `"mic_and_timer" | "auto_advance" | null`
+Specifically, track the index of the message this stream created:
 
-### No changes needed in other files
+```typescript
+let myMessageIndex = -1;
 
-`useIeltsTestFlow.ts` and `useSpeechRecognition.ts` remain unchanged.
+setMessages((prev) => {
+  if (myMessageIndex === -1) {
+    // First chunk: always create a new message
+    myMessageIndex = prev.length;
+    return [...prev, { role: "assistant", content: snapshot }];
+  }
+  // Subsequent chunks: update only our message by index
+  return prev.map((m, i) => (i === myMessageIndex ? { ...m, content: snapshot } : m));
+});
+```
+
+### Change 2: Add guard to mic-off fallback (`src/pages/IeltsChat.tsx`)
+
+Add an additional check: only auto-advance if `isSpeaking` is also false (meaning the AI has finished speaking the current response). This prevents the fallback from firing while audio is still playing.
+
+```typescript
+// Line 125: add !isSpeaking check
+if (wasListeningRef.current && !isListening && !isLoading && !isSpeaking) {
+```
+
+## Files Changed
+
+- `src/pages/IeltsChat.tsx` -- two targeted edits
 
 ## Result
 
-- Introduction phases: AI speaks, then nothing happens automatically. User clicks mic when ready, speaks, mic off triggers next question immediately.
-- Part 1/2/3: Timer starts only after AI finishes speaking the question. User clicks mic independently.
-- No more lag during introduction since there's no pending action waiting on TTS state.
+- Each AI response gets its own chat bubble that cannot be overwritten by the next response
+- Mic-off fallback waits for audio to finish before auto-advancing
+- Audio and text will always match
 
