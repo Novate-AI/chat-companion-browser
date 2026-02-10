@@ -1,1 +1,16 @@
 project_id = "prvkyynpnpkdcgvwcnci"
+
+[functions.elevenlabs-tts]
+verify_jwt = false
+
+[functions.ielts-chat]
+verify_jwt = false
+
+[functions.ielts-feedback]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false
+
+[functions.generate-feedback]
+verify_jwt = false
