@@ -228,6 +228,8 @@ const IeltsChat = () => {
 
   const sendMessage = useCallback(async (input: string) => {
     stopTimer();
+    // Prevent mic-off fallback from double-advancing (speech was captured)
+    wasListeningRef.current = false;
     if (isListening) stopListening();
 
     const userMsg: Msg = { role: "user", content: input };
