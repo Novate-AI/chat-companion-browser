@@ -97,6 +97,10 @@ export default {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "bounce-right": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "50%": { transform: "translateX(6px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -107,6 +111,7 @@ export default {
         "gradient-shift": "gradient-shift 8s ease infinite",
         "ring-pulse": "ring-pulse 4s ease-in-out infinite",
         "shimmer": "shimmer 3s linear infinite",
+        "bounce-right": "bounce-right 0.6s ease-in-out infinite",
       },
     },
   },
