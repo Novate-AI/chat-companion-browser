@@ -7,10 +7,12 @@ import { ChatInput } from "@/components/ChatInput";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
 import { TranscriptDialog } from "@/components/TranscriptDialog";
+import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Lightbulb, LightbulbOff, FileText } from "lucide-react";
+import { ArrowLeft, Lightbulb, LightbulbOff, FileText, ClipboardCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getSpeakableText } from "@/lib/chatHelpers";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -28,6 +30,7 @@ const Chat = () => {
   const [nativeLanguage, setNativeLanguage] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [autoIntroSent, setAutoIntroSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -41,12 +44,12 @@ const Chat = () => {
   const { isListening, start: startListening, stop: stopListening, isSupported: micSupported } =
     useSpeechRecognition({ lang: lang.recognitionCode, onResult: onVoiceResult });
 
-  // Auto-scroll to bottom
+  // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-send intro message on mount
+  // Auto intro on mount
   useEffect(() => {
     if (!autoIntroSent) {
       setAutoIntroSent(true);
@@ -55,7 +58,7 @@ const Chat = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-play voice when a new assistant message finishes streaming
+  // Auto-play voice when assistant finishes (only speakable text)
   const lastAssistantRef = useRef<string>("");
   const wasLoadingRef = useRef(false);
   useEffect(() => {
@@ -63,29 +66,24 @@ const Chat = () => {
       const last = messages[messages.length - 1];
       if (last.role === "assistant" && last.content !== lastAssistantRef.current) {
         lastAssistantRef.current = last.content;
-        // Auto-play the response
-        speak(last.content);
+        speak(getSpeakableText(last.content));
       }
     }
     wasLoadingRef.current = isLoading;
   }, [isLoading, messages, speak]);
 
-  // Detect native language from early messages
+  // Detect native language
   useEffect(() => {
     if (nativeLanguage) return;
     const userMsgs = messages.filter(m => m.role === "user");
     if (userMsgs.length >= 1) {
-      // Check if the AI responded with knowledge of native language
       const lastAssistant = messages.filter(m => m.role === "assistant").pop();
       if (lastAssistant) {
-        // Try to detect language codes mentioned
         const lowerContent = userMsgs[0].content.toLowerCase();
         const match = languages.find(l =>
           lowerContent.includes(l.name.toLowerCase()) || lowerContent.includes(l.code)
         );
-        if (match) {
-          setNativeLanguage(match.code);
-        }
+        if (match) setNativeLanguage(match.code);
       }
     }
   }, [messages, nativeLanguage]);
@@ -93,7 +91,6 @@ const Chat = () => {
   const triggerIntro = async () => {
     setIsLoading(true);
     let assistantSoFar = "";
-
     try {
       const resp = await fetch(CHAT_URL, {
         method: "POST",
@@ -101,14 +98,8 @@ const Chat = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({
-          messages: [],
-          language: langCode,
-          nativeLanguage: null,
-          showSuggestions,
-        }),
+        body: JSON.stringify({ messages: [], language: langCode, nativeLanguage: null, showSuggestions: false }),
       });
-
       if (!resp.ok || !resp.body) throw new Error("Failed to connect");
       await processStream(resp.body, assistantSoFar);
     } catch (e) {
@@ -123,7 +114,6 @@ const Chat = () => {
     const userMsg: Msg = { role: "user", content: input };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
-
     let assistantSoFar = "";
     const allMessages = [...messages, userMsg];
 
@@ -134,26 +124,12 @@ const Chat = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({
-          messages: allMessages,
-          language: langCode,
-          nativeLanguage,
-          showSuggestions,
-        }),
+        body: JSON.stringify({ messages: allMessages, language: langCode, nativeLanguage, showSuggestions }),
       });
 
-      if (resp.status === 429) {
-        toast({ title: "Rate limited", description: "Too many requests. Please wait a moment.", variant: "destructive" });
-        setIsLoading(false);
-        return;
-      }
-      if (resp.status === 402) {
-        toast({ title: "Credits needed", description: "Please add credits to continue.", variant: "destructive" });
-        setIsLoading(false);
-        return;
-      }
+      if (resp.status === 429) { toast({ title: "Rate limited", description: "Too many requests.", variant: "destructive" }); setIsLoading(false); return; }
+      if (resp.status === 402) { toast({ title: "Credits needed", description: "Please add credits.", variant: "destructive" }); setIsLoading(false); return; }
       if (!resp.ok || !resp.body) throw new Error("Failed to connect");
-
       await processStream(resp.body, assistantSoFar);
     } catch (e) {
       console.error(e);
@@ -212,19 +188,25 @@ const Chat = () => {
 
   const handleSpeak = (text: string) => {
     if (isSpeaking) stopSpeaking();
-    else speak(text);
+    else speak(getSpeakableText(text));
   };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    if (!isLoading) sendMessage(suggestion);
+  };
+
+  const hasEnoughMessages = messages.length > 2;
 
   return (
     <div className="flex flex-col h-screen bg-[#FAFAF8] relative overflow-hidden">
       {/* Background blobs */}
-      <div className="absolute top-[-10%] right-[-5%] w-[300px] h-[300px] rounded-full bg-gradient-to-br from-teal-300/30 to-cyan-200/20 blur-[80px] animate-float pointer-events-none" />
-      <div className="absolute bottom-[-5%] left-[-5%] w-[250px] h-[250px] rounded-full bg-gradient-to-br from-purple-300/20 to-pink-200/15 blur-[80px] animate-float pointer-events-none" style={{ animationDelay: "2s" }} />
+      <div className="absolute top-[-10%] right-[-5%] w-[200px] sm:w-[300px] h-[200px] sm:h-[300px] rounded-full bg-gradient-to-br from-teal-300/30 to-cyan-200/20 blur-[80px] animate-float pointer-events-none" />
+      <div className="absolute bottom-[-5%] left-[-5%] w-[180px] sm:w-[250px] h-[180px] sm:h-[250px] rounded-full bg-gradient-to-br from-purple-300/20 to-pink-200/15 blur-[80px] animate-float pointer-events-none" style={{ animationDelay: "2s" }} />
 
       {/* Header */}
-      <header className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-border/50 bg-white/70 backdrop-blur-sm">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/novatutor")} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
+      <header className="relative z-10 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-border/50 bg-white/70 backdrop-blur-sm">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/novatutor")} className="text-muted-foreground hover:text-foreground h-8 w-8 sm:h-9 sm:w-9">
+          <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
         <div className="relative">
           <div className="rounded-full p-0.5 bg-gradient-to-br from-teal-400 to-cyan-400">
@@ -233,36 +215,33 @@ const Chat = () => {
             </div>
           </div>
         </div>
-        <div className="flex-1">
-          <p className="font-semibold text-sm text-foreground">Tom Holland</p>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm text-foreground truncate">Tom Holland</p>
           <p className="text-xs text-muted-foreground">{lang.flag} {lang.name} tutor</p>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowSuggestions(!showSuggestions)}
-            className="text-muted-foreground hover:text-foreground"
-            title={showSuggestions ? "Disable response suggestions" : "Enable response suggestions"}
-          >
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          <Button variant="ghost" size="icon" onClick={() => setShowSuggestions(!showSuggestions)}
+            className="text-muted-foreground hover:text-foreground h-8 w-8"
+            title={showSuggestions ? "Disable suggestions" : "Enable suggestions"}>
             {showSuggestions ? <Lightbulb className="h-4 w-4 text-amber-500" /> : <LightbulbOff className="h-4 w-4" />}
           </Button>
-          {messages.length > 2 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowTranscript(true)}
-              className="text-muted-foreground hover:text-foreground"
-              title="View transcript"
-            >
-              <FileText className="h-4 w-4" />
-            </Button>
+          {hasEnoughMessages && (
+            <>
+              <Button variant="ghost" size="icon" onClick={() => setShowTranscript(true)}
+                className="text-muted-foreground hover:text-foreground h-8 w-8" title="View transcript">
+                <FileText className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setShowFeedback(true)}
+                className="text-muted-foreground hover:text-foreground h-8 w-8" title="Get feedback">
+                <ClipboardCheck className="h-4 w-4" />
+              </Button>
+            </>
           )}
         </div>
       </header>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-4 py-4 relative z-10">
+      <ScrollArea className="flex-1 px-3 sm:px-4 py-4 relative z-10">
         {messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-20">
             <div className="rounded-full p-1 bg-gradient-to-br from-teal-400 to-cyan-400 shadow-lg shadow-teal-200/50">
@@ -281,6 +260,7 @@ const Chat = () => {
             content={msg.content}
             isSpeaking={isSpeaking}
             onSpeak={msg.role === "assistant" ? () => handleSpeak(msg.content) : undefined}
+            onSuggestionClick={msg.role === "assistant" && i === messages.length - 1 ? handleSuggestionClick : undefined}
           />
         ))}
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
@@ -304,22 +284,12 @@ const Chat = () => {
 
       {/* Input */}
       <div className="relative z-10">
-        <ChatInput
-          onSend={sendMessage}
-          isLoading={isLoading}
-          isListening={isListening}
-          onMicToggle={handleMicToggle}
-          micSupported={micSupported}
-        />
+        <ChatInput onSend={sendMessage} isLoading={isLoading} isListening={isListening} onMicToggle={handleMicToggle} micSupported={micSupported} />
       </div>
 
-      {/* Transcript Dialog */}
-      <TranscriptDialog
-        open={showTranscript}
-        onOpenChange={setShowTranscript}
-        messages={messages}
-        language={lang.name}
-      />
+      {/* Dialogs */}
+      <TranscriptDialog open={showTranscript} onOpenChange={setShowTranscript} messages={messages} language={lang.name} />
+      <FeedbackDialog open={showFeedback} onOpenChange={setShowFeedback} messages={messages} language={lang.name} />
     </div>
   );
 };

@@ -1,45 +1,94 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { LingbotAvatar } from "./LingbotAvatar";
-import { Volume2 } from "lucide-react";
+import { Volume2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { parseAssistantMessage } from "@/lib/chatHelpers";
 
 interface ChatBubbleProps {
   role: "user" | "assistant";
   content: string;
   isSpeaking?: boolean;
   onSpeak?: () => void;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
-export function ChatBubble({ role, content, isSpeaking, onSpeak }: ChatBubbleProps) {
+export function ChatBubble({ role, content, isSpeaking, onSpeak, onSuggestionClick }: ChatBubbleProps) {
   const isBot = role === "assistant";
+  const [showTranslation, setShowTranslation] = useState(false);
+
+  const parsed = isBot ? parseAssistantMessage(content) : null;
+  const displayContent = isBot ? parsed!.mainContent : content;
+  const hasTranslation = parsed?.translation || parsed?.transliteration;
 
   return (
-    <div className={cn("flex gap-3 mb-4", isBot ? "justify-start" : "justify-end")}>
-      {isBot && (
-        <div className="rounded-full p-0.5 bg-gradient-to-br from-teal-400 to-cyan-400 self-end shrink-0">
-          <div className="rounded-full overflow-hidden bg-white">
-            <LingbotAvatar size="sm" isSpeaking={isSpeaking} />
+    <div className={cn("mb-4", isBot ? "" : "flex justify-end")}>
+      <div className={cn("flex gap-3", isBot ? "justify-start" : "justify-end")}>
+        {isBot && (
+          <div className="rounded-full p-0.5 bg-gradient-to-br from-teal-400 to-cyan-400 self-end shrink-0">
+            <div className="rounded-full overflow-hidden bg-white">
+              <LingbotAvatar size="sm" isSpeaking={isSpeaking} />
+            </div>
           </div>
+        )}
+        <div className={cn(
+          "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
+          isBot
+            ? "bg-white border border-border/50 text-foreground rounded-bl-sm"
+            : "bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-br-sm shadow-teal-200/40 shadow-md"
+        )}>
+          <p className="whitespace-pre-wrap">{displayContent}</p>
+
+          {/* Translation/Transliteration dropdown */}
+          {isBot && hasTranslation && (
+            <div className="mt-2 border-t border-border/30 pt-2">
+              <button
+                onClick={() => setShowTranslation(!showTranslation)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showTranslation ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showTranslation ? "Hide translation" : "Show translation"}
+              </button>
+              {showTranslation && (
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {parsed?.translation && (
+                    <p><span className="font-medium text-foreground/70">Translation:</span> {parsed.translation}</p>
+                  )}
+                  {parsed?.transliteration && (
+                    <p><span className="font-medium text-foreground/70">Transliteration:</span> {parsed.transliteration}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {isBot && onSpeak && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 mt-1 opacity-60 hover:opacity-100"
+              onClick={onSpeak}
+            >
+              <Volume2 className={cn("h-3.5 w-3.5", isSpeaking && "text-teal-500 animate-pulse")} />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Suggestions below the bubble */}
+      {isBot && parsed?.suggestions && parsed.suggestions.length > 0 && onSuggestionClick && (
+        <div className="ml-12 mt-2 flex flex-wrap gap-2">
+          {parsed.suggestions.map((sug, i) => (
+            <button
+              key={i}
+              onClick={() => onSuggestionClick(sug)}
+              className="text-xs px-3 py-1.5 rounded-full border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-300 transition-colors"
+            >
+              {sug}
+            </button>
+          ))}
         </div>
       )}
-      <div className={cn(
-        "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
-        isBot
-          ? "bg-white border border-border/50 text-foreground rounded-bl-sm"
-          : "bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-br-sm shadow-teal-200/40 shadow-md"
-      )}>
-        <p className="whitespace-pre-wrap">{content}</p>
-        {isBot && onSpeak && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 mt-1 opacity-60 hover:opacity-100"
-            onClick={onSpeak}
-          >
-            <Volume2 className={cn("h-3.5 w-3.5", isSpeaking && "text-teal-500 animate-pulse")} />
-          </Button>
-        )}
-      </div>
     </div>
   );
 }
