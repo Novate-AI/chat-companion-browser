@@ -1,92 +1,80 @@
 
 
-# Fix Voice Lag -- Stream Audio While Chat is Streaming
+# Fix: Keep Microphone Active for Full Response Window
 
-## Problem
+## Root Cause
 
-The voice playback lags behind the chat text because of two sequential bottlenecks:
-1. The app waits for the **entire chat response** to finish streaming before sending text to ElevenLabs
-2. The ElevenLabs call waits for the **entire audio file** to be generated before playback begins
+Two issues cause the current behavior:
 
-This creates a noticeable delay: chat finishes, then silence, then voice starts seconds later.
+1. **Speech recognition ends after one phrase**: The `useSpeechRecognition` hook uses `continuous = false`, so when the user pauses even briefly, the browser fires `onresult` which immediately calls `handleUserResponse`, stopping the timer and advancing to the next question -- even if 18 seconds remain.
+
+2. **Mic breaks after auto-start**: Calling `SpeechRecognition.start()` inside `setTimeout` (as `startUserResponseWindow` does) loses the browser's "user gesture" context, causing permission errors and rendering the mic unusable.
 
 ## Solution
 
-Implement **chunked TTS** so audio starts playing while the chat is still streaming, and use ElevenLabs' streaming audio endpoint so playback begins before the full audio is generated.
+### 1. Continuous Speech Recognition with Auto-Restart (`src/hooks/useSpeechRecognition.ts`)
 
-## What Changes
+Rewrite the hook to:
+- Set `continuous = true` so the browser keeps listening through pauses
+- Use a ref (`shouldBeListeningRef`) to track whether we *intend* to be listening
+- On the `onend` event, automatically restart recognition if we still intend to listen (browsers sometimes stop recognition due to silence -- this restarts it)
+- Accumulate all transcripts during the window into a single string instead of firing `onResult` per phrase
+- Only call `onResult` with the accumulated transcript when `stop()` is explicitly called
+- Handle errors gracefully (`no-speech` is normal, `not-allowed` means permission denied)
 
-### 1. Start TTS earlier with sentence chunking (`src/pages/Chat.tsx`)
+### 2. Decouple Mic from Timer Advancement (`src/pages/IELTSChat.tsx`)
 
-Instead of waiting for the full response, detect complete sentences as they stream in and send each sentence to TTS immediately.
+Change how user responses work during timed windows:
+- Remove the pattern where `onVoiceResult` immediately calls `handleUserResponse` (which stops timers and advances)
+- Instead, accumulate speech into a ref during the response window
+- Only advance when the **countdown timer expires** (20s for Part 1, 120s for Part 2, 25s for Part 3)
+- The user can also submit early via the text input or a "Done" action, but pausing speech alone will NOT advance
 
-- Track which text has already been sent to TTS
-- As new content streams in, extract complete sentences (split on `.` `!` `?`)
-- Queue each sentence for TTS playback in order
-- Remove the "wait for isLoading to flip" pattern
+### 3. First Mic Activation from User Gesture
 
-### 2. Stream audio from ElevenLabs (`supabase/functions/elevenlabs-tts/index.ts`)
+- The very first mic activation happens when the user clicks "Yes" / types their first response (a real user gesture)
+- Subsequent auto-starts work because the permission is already granted and we use the auto-restart pattern in the `onend` handler
+- Remove the `setTimeout(() => startListening(), 500)` pattern that breaks gesture context
 
-Switch from buffering the full audio to streaming it through:
+## How It Works After the Fix
 
-- Use ElevenLabs streaming endpoint (same URL, just pipe the response body directly instead of buffering with `arrayBuffer()`)
-- Return the audio stream to the client as it arrives
-- This alone cuts perceived latency by 1-3 seconds
+```
+AI asks question -> AI finishes speaking -> Timer starts (20s/25s/120s)
+                                             |
+                                             v
+                                    Mic activates, user speaks
+                                    User pauses -> mic auto-restarts
+                                    User speaks again -> transcript accumulates
+                                             |
+                                             v
+                                    Timer hits 0 -> mic stops
+                                                 -> accumulated transcript saved
+                                                 -> advance to next question
+```
 
-### 3. Play audio as it streams (`src/hooks/useSpeechSynthesis.ts`)
-
-Update the hook to support:
-
-- A **queue system** for multiple text chunks (sentences) arriving over time
-- Play chunks sequentially -- when one finishes, start the next
-- Use `MediaSource` API or sequential `Audio` elements for gapless playback
-- Keep the fallback to browser speech if ElevenLabs fails
+The user gets the FULL duration regardless of pauses. Speech is accumulated, not treated as individual responses.
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `supabase/functions/elevenlabs-tts/index.ts` | Stream audio response instead of buffering the full file |
-| `src/hooks/useSpeechSynthesis.ts` | Add a sentence queue system -- accept chunks, play them sequentially |
-| `src/pages/Chat.tsx` | Send sentences to TTS as they stream in, rather than waiting for the full response |
+| `src/hooks/useSpeechRecognition.ts` | Rewrite: `continuous = true`, auto-restart on `onend`, accumulate transcripts, only fire result on explicit stop |
+| `src/pages/IELTSChat.tsx` | Decouple voice input from phase advancement; only advance on timer expiry or explicit user submit; remove `setTimeout` mic starts |
 
 ## Technical Details
 
-**Sentence chunking logic (Chat.tsx):**
+**useSpeechRecognition.ts changes:**
+- Add `shouldBeListeningRef` to track intent
+- Add `accumulatedRef` to collect all speech during a window
+- Set `continuous = true` on the recognition instance
+- `onend`: if `shouldBeListeningRef.current` is true, call `recognition.start()` again (auto-restart)
+- `onresult`: append transcript to `accumulatedRef`, do NOT call `onResult` callback
+- New `stop()`: set `shouldBeListeningRef` to false, call `recognition.stop()`, then fire `onResult` with the full accumulated transcript
+- `onerror`: handle `no-speech` (ignore, will auto-restart), `not-allowed` (stop and warn)
 
-The `processStream` function already assembles text token-by-token. We add a tracker for the last TTS position, and after each token, check if a new complete sentence has formed:
+**IELTSChat.tsx changes:**
+- `onVoiceResult` callback: instead of calling `handleUserResponse`, just append to a `pendingTranscriptRef`
+- `startUserResponseWindow`: start mic + countdown; when countdown hits 0, stop mic, read `pendingTranscriptRef`, then call `advanceAfterUserResponse` with the accumulated text
+- User can still type and submit manually (which stops timer + mic and advances immediately)
+- For Part 2 long window: same pattern but 120s
 
-```text
-spokenUpTo = 0
-onNewContent(fullText):
-  remaining = fullText.slice(spokenUpTo)
-  sentences = split remaining on sentence boundaries (. ! ?)
-  for each complete sentence (not the last partial one):
-    queue sentence for TTS
-    spokenUpTo += sentence.length
-```
-
-**Audio queue (useSpeechSynthesis.ts):**
-
-```text
-queue = []
-isPlaying = false
-
-speakQueued(text):
-  queue.push(text)
-  if not isPlaying: playNext()
-
-playNext():
-  if queue is empty: isPlaying = false; return
-  isPlaying = true
-  chunk = queue.shift()
-  fetch TTS for chunk
-  play audio
-  on audio ended: playNext()
-```
-
-**Edge function streaming:**
-
-Replace `await response.arrayBuffer()` with directly piping `response.body` to the client response. This means audio bytes start flowing to the browser as soon as ElevenLabs begins generating.
-
-No new dependencies needed. ElevenLabs API usage stays the same (same endpoint, same model).
