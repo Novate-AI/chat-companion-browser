@@ -40,8 +40,8 @@ const IeltsChat = () => {
   const { isSpeaking, speak, speakQueued, stop: stopSpeaking } = useSpeechSynthesis("en-GB");
   const spokenUpToRef = useRef(0);
 
-  // Track whether we're waiting for AI to finish speaking before starting mic
-  const pendingMicStartRef = useRef(false);
+  // Track post-AI action type
+  const pendingActionRef = useRef<"mic_only" | "mic_and_timer" | "auto_advance" | null>(null);
   const pendingTimerPhaseRef = useRef<IeltsPhase | null>(null);
 
   const onVoiceResult = useCallback((transcript: string) => {
@@ -80,39 +80,45 @@ const IeltsChat = () => {
     }
   }, [speakQueued]);
 
-  // Watch for AI to stop speaking, then start mic+timer if pending
+  // Watch for AI to stop speaking, then execute pending action
   useEffect(() => {
-    if (!isSpeaking && pendingMicStartRef.current && pendingTimerPhaseRef.current) {
-      pendingMicStartRef.current = false;
+    if (!isSpeaking && pendingActionRef.current && pendingTimerPhaseRef.current) {
+      const action = pendingActionRef.current;
       const currentPhase = pendingTimerPhaseRef.current;
+      pendingActionRef.current = null;
       pendingTimerPhaseRef.current = null;
 
-      // Get duration based on the phase
-      let duration = 0;
-      if (currentPhase === "PART1_QUESTION") duration = 17;
-      else if (currentPhase === "PART2_SPEAK") duration = 120;
-      else if (currentPhase === "PART3_QUESTION") duration = 22;
-      else if (currentPhase === "ASK_ID") duration = 5;
-
-      if (duration > 0 && (currentPhase === "PART1_QUESTION" || currentPhase === "PART2_SPEAK" || currentPhase === "PART3_QUESTION")) {
-        // Start mic and timer
+      if (action === "mic_only") {
+        // Just start mic, no timer (intro phases)
         startListening();
-        startTimer(duration, false, () => {
-          stopListening();
-          // Auto-send whatever was captured or advance
-          handleTimerExpire();
-        });
-      } else if (currentPhase === "ASK_ID") {
-        // Wait 5 seconds then auto-advance
-        startTimer(5, false, () => {
-          triggerAIMessage("ID_PAUSE");
-        });
-      } else if (currentPhase === "PART2_PREP") {
-        // 1 min prep countdown
-        startTimer(60, true, () => {
-          // Start Part 2 speaking
-          triggerAIPhase("PART2_SPEAK");
-        });
+      } else if (action === "mic_and_timer") {
+        let duration = 0;
+        if (currentPhase === "PART1_QUESTION") duration = 17;
+        else if (currentPhase === "PART2_SPEAK") duration = 120;
+        else if (currentPhase === "PART3_QUESTION") duration = 22;
+        else if (currentPhase === "ASK_ID") duration = 5;
+
+        if (currentPhase === "PART1_QUESTION" || currentPhase === "PART2_SPEAK" || currentPhase === "PART3_QUESTION") {
+          startListening();
+          startTimer(duration, false, () => {
+            stopListening();
+            handleTimerExpire();
+          });
+        } else if (currentPhase === "ASK_ID") {
+          startTimer(5, false, () => {
+            triggerAIMessage("ID_PAUSE");
+          });
+        } else if (currentPhase === "PART2_PREP") {
+          startTimer(60, true, () => {
+            triggerAIPhase("PART2_SPEAK");
+          });
+        }
+      } else if (action === "auto_advance") {
+        // Auto-advance to next phase after AI finishes speaking
+        const nextPhase = advancePhase();
+        if (nextPhase !== "CONCLUSION") {
+          triggerAIMessage(nextPhase);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,23 +187,16 @@ const IeltsChat = () => {
     const waitForUserPhases: IeltsPhase[] = ["INTRO", "ASK_NAME", "ASK_NICKNAME_ORIGIN"];
 
     if (waitForUserPhases.includes(currentPhase)) {
-      // Just wait for user to type/speak - auto-start mic after AI finishes
-      pendingMicStartRef.current = false; // Don't auto-start timer, just enable mic
-      // We'll start listening after AI finishes speaking
-      setTimeout(() => {
-        if (!isSpeaking) startListening();
-        else {
-          pendingMicStartRef.current = true;
-          pendingTimerPhaseRef.current = currentPhase;
-        }
-      }, 500);
+      // Wait for AI audio to finish, then start mic
+      pendingActionRef.current = "mic_only";
+      pendingTimerPhaseRef.current = currentPhase;
       return;
     }
 
     // Phases that need timer after AI speaks
     const timedPhases: IeltsPhase[] = ["PART1_QUESTION", "PART2_SPEAK", "PART3_QUESTION", "ASK_ID", "PART2_PREP"];
     if (timedPhases.includes(currentPhase)) {
-      pendingMicStartRef.current = true;
+      pendingActionRef.current = "mic_and_timer";
       pendingTimerPhaseRef.current = currentPhase;
       return;
     }
@@ -205,16 +204,8 @@ const IeltsChat = () => {
     // Auto-advance phases (AI speaks then immediately moves on)
     const autoAdvancePhases: IeltsPhase[] = ["ID_PAUSE", "PART1_INTRO", "PART2_INTRO", "PART3_INTRO"];
     if (autoAdvancePhases.includes(currentPhase)) {
-      // Wait for AI to finish speaking, then advance
-      const checkAndAdvance = () => {
-        setTimeout(() => {
-          const nextPhase = advancePhase();
-          if (nextPhase !== "CONCLUSION") {
-            triggerAIMessage(nextPhase);
-          }
-        }, 1500);
-      };
-      checkAndAdvance();
+      pendingActionRef.current = "auto_advance";
+      pendingTimerPhaseRef.current = currentPhase;
       return;
     }
 
