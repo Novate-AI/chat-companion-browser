@@ -1,73 +1,48 @@
 
 
-# Fix: Remove Auto-Mic and Ensure Next Question Always Fires
+# Fix: No Timers for Introduction, Timers Only Start at Part 1
 
-## Problems Identified
+## Problem
 
-1. **Auto-mic activation**: The mic starts automatically after AI speaks, which is unreliable and unwanted. User wants manual control.
-2. **Stuck flow**: When the user stops speaking or turns off the mic without a speech result being captured, `sendMessage` is never called, so the test gets stuck -- no next question is asked.
+1. **Introduction phases have unnecessary pending actions**: The intro phases (`INTRO`, `ASK_NAME`, `ASK_NICKNAME_ORIGIN`) schedule a `"mic_only"` pending action that waits for `isSpeaking` to go false. This adds latency since it depends on TTS state detection. There should be no timer and no pending action -- the system simply waits for the user to speak.
 
-## Root Cause
-
-Currently, `onResult` (speech recognized) calls `sendMessage`, which calls `advancePhase` + `triggerAIMessage`. But if the user toggles the mic off without speaking (or speech recognition ends with no result), nothing triggers the next question. The timers help for timed phases, but intro phases have no timer fallback.
+2. **Timers should only begin at Part 1**: Currently `ASK_ID` is treated as a timed phase. The ID check is still part of the introduction and should use the simple auto-advance pattern instead.
 
 ## Solution
 
-### 1. Remove all automatic mic activation (`src/pages/IeltsChat.tsx`)
-
-- Remove the `"mic_only"` pending action entirely -- it auto-started the mic after AI spoke during intro phases
-- In `"mic_and_timer"`, remove the `startListening()` calls -- only start the timer, not the mic
-- The user will click the mic button themselves when ready to speak
-
-### 2. Detect mic-off-without-speech and auto-advance (`src/pages/IeltsChat.tsx`)
-
-Add a `useEffect` that watches `isListening`. When it transitions from `true` to `false`:
-- Check if the last message in the conversation is still from the **assistant** (meaning the user's speech was NOT captured as a message)
-- If so, AND we're in a user-turn phase, automatically advance to the next question
-- This covers: user clicks mic off without speaking, or speech recognition ends with an error/no-speech
-
-This also handles the case where speech IS captured: `onResult` fires `sendMessage` which adds a user message, so the check (`last message is assistant`) will be false and we won't double-advance.
-
-### 3. Keep timers as-is for timed phases
-
-Timers still auto-advance when they expire (Part 1, Part 2, Part 3). This is independent of mic state.
-
-## Changes
-
 ### `src/pages/IeltsChat.tsx`
 
-**Pending action effect (lines 88-130):**
-- `"mic_only"` action: change from `startListening()` to doing nothing (just wait for user to click mic) -- or remove this action type entirely and use `"timer_only"` concept
-- `"mic_and_timer"` action: remove `startListening()` calls, keep only `startTimer()`
+**`schedulePostAIAction` (lines 211-239):**
+- Remove `INTRO`, `ASK_NAME`, `ASK_NICKNAME_ORIGIN` from the `waitForUserPhases` list and eliminate the `"mic_only"` action entirely
+- For these intro phases, set NO pending action at all -- the mic-off-without-speech `useEffect` (line 132) and `sendMessage` already handle advancing when the user speaks or toggles the mic
+- Move `ASK_ID` from the timed phases to the auto-advance phases (`ID_PAUSE` behavior: AI says "May I see your ID", then after speaking auto-advances to `ID_PAUSE` which says "Thank you")
+- The `"mic_only"` action type can be removed entirely since no phase uses it anymore
 
-**New effect -- watch for mic turning off:**
-```
-useEffect that tracks isListening going false:
-  - Use a ref (wasListeningRef) to detect the transition
-  - When isListening goes from true to false:
-    - Check if last message is from "assistant" (no user speech was captured)
-    - If yes and not loading, advance phase and trigger next AI question
-```
+**Updated `schedulePostAIAction` logic:**
 
-**`handleMicToggle` (line 291-293):** No changes needed -- user clicks to start/stop.
+| Phase | Action |
+|-------|--------|
+| `INTRO`, `ASK_NAME`, `ASK_NICKNAME_ORIGIN` | No pending action -- just wait for user to click mic |
+| `ASK_ID` | `auto_advance` -- AI asks for ID, then auto-advances to `ID_PAUSE` |
+| `ID_PAUSE`, `PART1_INTRO`, `PART2_INTRO`, `PART3_INTRO` | `auto_advance` -- AI speaks then moves on |
+| `PART1_QUESTION`, `PART2_SPEAK`, `PART3_QUESTION` | `mic_and_timer` -- timer starts after AI speaks |
+| `PART2_PREP` | `mic_and_timer` -- 60s prep timer |
+| `CONCLUSION` | Nothing |
 
-### `src/hooks/useSpeechRecognition.ts`
+**Pending action effect (lines 90-129):**
+- Remove the `"mic_only"` branch entirely
+- Remove `ASK_ID` from the `"mic_and_timer"` branch
 
-No changes needed.
+**`pendingActionRef` type (line 45):**
+- Change from `"mic_only" | "mic_and_timer" | "auto_advance" | null` to `"mic_and_timer" | "auto_advance" | null`
 
-### `src/hooks/useIeltsTestFlow.ts`
+### No changes needed in other files
 
-No changes needed.
+`useIeltsTestFlow.ts` and `useSpeechRecognition.ts` remain unchanged.
 
-## Flow After Fix
+## Result
 
-```
-AI finishes speaking
-  -> For intro phases: nothing happens, user clicks mic when ready
-  -> For timed phases: timer starts (no mic), user clicks mic when ready
-
-User clicks mic ON -> speaks -> speech recognized -> onResult -> sendMessage -> advance
-User clicks mic ON -> clicks OFF without speaking -> isListening goes false -> auto-advance
-Timer expires -> advance (regardless of mic state)
-```
+- Introduction phases: AI speaks, then nothing happens automatically. User clicks mic when ready, speaks, mic off triggers next question immediately.
+- Part 1/2/3: Timer starts only after AI finishes speaking the question. User clicks mic independently.
+- No more lag during introduction since there's no pending action waiting on TTS state.
 
