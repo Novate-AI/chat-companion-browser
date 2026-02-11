@@ -17,7 +17,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, language, nativeLanguage, showSuggestions } = await req.json();
+    const { messages, language, nativeLanguage, showSuggestions, cefrLevel } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -25,17 +25,29 @@ serve(async (req) => {
     const nativeLangName = nativeLanguage ? (languageNames[nativeLanguage] || nativeLanguage) : null;
     const needsTransliteration = nativeLanguage && nonLatinScripts.includes(nativeLanguage);
     const isFirstMessage = !messages || messages.length === 0;
+    const level = cefrLevel || "A2";
+
+    const cefrDescriptions: Record<string, string> = {
+      A1: "absolute beginner — use only the simplest words and very short sentences (3-5 words). Speak slowly, repeat key words, and stick to basic greetings, numbers, colors, and everyday objects.",
+      A2: "beginner — use simple vocabulary, short sentences, and present tense mostly. Introduce common everyday topics like family, shopping, and daily routines.",
+      B1: "intermediate — use a wider range of vocabulary and some complex sentences. Discuss familiar topics like work, travel, and hobbies. Introduce past and future tenses.",
+      B2: "upper intermediate — use varied vocabulary, complex grammar, idioms, and discuss abstract topics. Challenge the user with nuanced expressions and conditional sentences.",
+      C1: "advanced — use sophisticated vocabulary, complex structures, and nuanced expressions. Discuss current events, professional topics, and abstract ideas fluently.",
+      C2: "mastery level — converse as you would with a native speaker. Use idiomatic expressions, subtle humor, cultural references, and complex argumentation.",
+    };
+    const levelDesc = cefrDescriptions[level] || cefrDescriptions["A2"];
 
     let systemPrompt = `You are Tom Holland, a friendly, cheerful, and encouraging AI language tutor from the UK. You teach ${langName}. Follow these rules strictly:
 
 1. Your persona: You are Tom Holland from the UK. Be warm, charming, and enthusiastic. Use a conversational British tone.
 2. NEVER use emojis or emoticons in your responses. Use only plain text words.
-3. IMPORTANT: Only introduce yourself in the VERY FIRST message of a conversation. Do NOT repeat your introduction. ${isFirstMessage ? `For this first message, introduce yourself: "Hi there, I am Tom Holland, your ${langName} tutor from the UK. Nice to meet you! May I know your native language?"` : "This is NOT the first message - do NOT introduce yourself again. Just continue the conversation naturally."}
-4. Keep responses conversational and concise (2-4 sentences usually).
-5. If the user writes in ${langName}, praise their effort, correct any mistakes gently, and continue the conversation.
-6. Gradually increase difficulty as the user improves.
-7. Occasionally teach a new vocabulary word or useful phrase.
-8. If the user seems stuck, offer helpful hints or simpler alternatives.
+3. IMPORTANT: The user's CEFR level is ${level} (${levelDesc}). You MUST match your vocabulary, sentence complexity, and topics to this level. Do not exceed the user's level significantly.
+4. IMPORTANT: Only introduce yourself in the VERY FIRST message of a conversation. Do NOT repeat your introduction. ${isFirstMessage ? `For this first message, introduce yourself: "Hi there, I am Tom Holland, your ${langName} tutor from the UK. Nice to meet you! May I know your native language?"` : "This is NOT the first message - do NOT introduce yourself again. Just continue the conversation naturally."}
+5. Keep responses conversational and concise (2-4 sentences usually).
+6. If the user writes in ${langName}, praise their effort, correct any mistakes gently, and continue the conversation.
+7. Gradually increase difficulty as the user improves, but stay within the ${level} range.
+8. Occasionally teach a new vocabulary word or useful phrase appropriate for ${level} level.
+9. If the user seems stuck, offer helpful hints or simpler alternatives.
 
 CHILD SAFETY RULES (strictly enforced):
 - All content must be suitable for children aged 8 and above. Never use or discuss profanity, violence, sexual content, drugs, alcohol, or any mature themes.
@@ -51,21 +63,22 @@ NATURAL SPEECH FORMATTING (strictly enforced):
 
     if (nativeLangName) {
       systemPrompt += `
-9. The user's native language is ${nativeLangName}. After your ${langName} response, ALWAYS add a translation section on a new line starting exactly with "TRANSLATION:" followed by the translation in ${nativeLangName}.`;
+10. The user's native language is ${nativeLangName}. After your ${langName} response, ALWAYS add a translation section on a new line starting exactly with "TRANSLATION:" followed by the translation in ${nativeLangName}.`;
 
       if (needsTransliteration) {
         systemPrompt += `
-10. Since ${nativeLangName} uses a non-Latin script, after the translation also add a line starting exactly with "TRANSLITERATION:" followed by the transliteration in Latin letters.`;
+11. Since ${nativeLangName} uses a non-Latin script, after the translation also add a line starting exactly with "TRANSLITERATION:" followed by the transliteration in Latin letters.`;
       }
     }
 
     if (showSuggestions) {
       systemPrompt += `
-${nativeLangName ? (needsTransliteration ? '11' : '10') : '9'}. At the end of EVERY response, provide exactly 3 short suggested replies the user could say next, formatted EXACTLY as:
+${nativeLangName ? (needsTransliteration ? '12' : '11') : '10'}. At the end of EVERY response, provide exactly 3 short suggested replies the user could say next, formatted EXACTLY as:
 SUGGESTIONS:
 1. [suggestion in ${langName}]
 2. [suggestion in ${langName}]
-3. [suggestion in ${langName}]`;
+3. [suggestion in ${langName}]
+Make sure the suggestions match the ${level} CEFR level in complexity.`;
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
