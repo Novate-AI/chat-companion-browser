@@ -4,12 +4,24 @@ import { Button } from "@/components/ui/button";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { LingbotAvatar } from "@/components/LingbotAvatar";
 import { MessageCircle, ArrowLeft, Sparkles } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+
+const cefrLevels = [
+  { value: "A1", label: "A1", desc: "Starter" },
+  { value: "A2", label: "A2", desc: "Beginner" },
+  { value: "B1", label: "B1", desc: "Intermediate" },
+  { value: "B2", label: "B2", desc: "Upper Intermediate" },
+  { value: "C1", label: "C1", desc: "Advanced" },
+  { value: "C2", label: "C2", desc: "Mastery" },
+];
 
 const Novatutor = () => {
   const [language, setLanguage] = useState("en");
+  const [level, setLevel] = useState("A2");
   const navigate = useNavigate();
 
-  const start = () => navigate(`/chat?lang=${language}`);
+  const start = () => navigate(`/chat?lang=${language}&level=${level}`);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#FAFAF8]">
@@ -68,6 +80,28 @@ const Novatutor = () => {
           {/* Language Selector */}
           <div className="animate-fade-in-up w-full flex justify-center" style={{ animationDelay: "0.2s", opacity: 0 }}>
             <LanguageSelector value={language} onChange={setLanguage} />
+          </div>
+
+          {/* CEFR Level Selector */}
+          <div className="animate-fade-in-up w-full" style={{ animationDelay: "0.25s", opacity: 0 }}>
+            <p className="text-sm font-medium text-slate-600 mb-3">Your level</p>
+            <RadioGroup value={level} onValueChange={setLevel} className="grid grid-cols-3 gap-2 w-full max-w-xs mx-auto">
+              {cefrLevels.map((l) => (
+                <Label
+                  key={l.value}
+                  htmlFor={`level-${l.value}`}
+                  className={`flex flex-col items-center gap-0.5 rounded-lg border-2 p-2.5 cursor-pointer transition-all text-center ${
+                    level === l.value
+                      ? "border-teal-500 bg-teal-50 shadow-sm"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <RadioGroupItem value={l.value} id={`level-${l.value}`} className="sr-only" />
+                  <span className={`text-sm font-bold ${level === l.value ? "text-teal-600" : "text-slate-700"}`}>{l.label}</span>
+                  <span className="text-[10px] text-slate-400 leading-tight">{l.desc}</span>
+                </Label>
+              ))}
+            </RadioGroup>
           </div>
 
           {/* CTA */}

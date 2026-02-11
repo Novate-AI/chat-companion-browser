@@ -23,6 +23,7 @@ const Chat = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const langCode = searchParams.get("lang") || "en";
+  const cefrLevel = searchParams.get("level") || "A2";
   const lang = languages.find((l) => l.code === langCode) || languages.find(l => l.code === "en")!;
 
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -113,7 +114,7 @@ const Chat = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: [], language: langCode, nativeLanguage: null, showSuggestions: false }),
+        body: JSON.stringify({ messages: [], language: langCode, nativeLanguage: null, showSuggestions: false, cefrLevel }),
       });
       if (!resp.ok || !resp.body) throw new Error("Failed to connect");
       assistantSoFar = await processStream(resp.body, assistantSoFar);
@@ -142,7 +143,7 @@ const Chat = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: allMessages, language: langCode, nativeLanguage, showSuggestions }),
+        body: JSON.stringify({ messages: allMessages, language: langCode, nativeLanguage, showSuggestions, cefrLevel }),
       });
 
       if (resp.status === 429) { toast({ title: "Rate limited", description: "Too many requests.", variant: "destructive" }); setIsLoading(false); return; }
