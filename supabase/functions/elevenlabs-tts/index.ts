@@ -48,6 +48,15 @@ serve(async (req) => {
       const errorText = await response.text();
       console.error("ElevenLabs error:", response.status, errorText);
 
+      // ElevenLabs returns 401 for both invalid key AND quota exceeded
+      const isQuotaExceeded = errorText.includes("quota_exceeded");
+
+      if (isQuotaExceeded) {
+        return new Response(JSON.stringify({ error: "ElevenLabs quota exceeded. Your account has no credits remaining." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (response.status === 401) {
         return new Response(JSON.stringify({ error: "Invalid ElevenLabs API key" }), {
           status: 401,
@@ -55,7 +64,7 @@ serve(async (req) => {
         });
       }
       if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "ElevenLabs rate limit or quota exceeded" }), {
+        return new Response(JSON.stringify({ error: "ElevenLabs rate limit exceeded" }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
