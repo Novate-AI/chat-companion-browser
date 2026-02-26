@@ -175,9 +175,17 @@ const Chat = () => {
           setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
           handleIntroResponse(false);
         } else {
-          // Add the scripted "Thank you" as an AI message so it appears after the user's reply
-          setAiMessages(prev => [...prev, { role: "assistant", content: "Thank you for that. So, what do you want to practice today?" }]);
-          handleIntroResponse(true);
+          // Check if the AI's response indicates it couldn't understand the user
+          const lower = fullText.toLowerCase();
+          const aiDetectedGibberish = /trouble|keyboard|testing|didn.?t understand|not sure what|gibberish|random|unclear|could you (try|say|repeat|type)|what do you mean/i.test(lower);
+          
+          if (aiDetectedGibberish) {
+            setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
+            handleIntroResponse(false);
+          } else {
+            setAiMessages(prev => [...prev, { role: "assistant", content: "Thank you for that. So, what do you want to practice today?" }]);
+            handleIntroResponse(true);
+          }
         }
       } catch {
         setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
