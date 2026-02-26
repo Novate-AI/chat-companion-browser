@@ -144,6 +144,8 @@ const Chat = () => {
         if (!fullText || fullText.trim().length === 0) {
           handleIntroResponse(false);
         } else {
+          // Add the scripted "Thank you" as an AI message so it appears after the user's reply
+          setAiMessages(prev => [...prev, { role: "assistant", content: "Thank you for that. So, what do you want to practice today?" }]);
           handleIntroResponse(true);
         }
       } catch {

@@ -6,7 +6,7 @@ type Msg = { role: "user" | "assistant"; content: string };
 
 const SEGMENTS: Record<string, { start: number; end: number; loop: boolean }> = {
   greeting: { start: 10, end: 15, loop: false },
-  ask_name: { start: 15, end: 19, loop: false },
+  ask_name: { start: 15, end: 20, loop: false },
   idle: { start: 0, end: 10, loop: true },
   not_understood: { start: 30, end: 36, loop: false },
   understood: { start: 23, end: 29, loop: false },
@@ -29,7 +29,8 @@ export function useIntroSequence() {
     phaseRef.current = p;
     setPhase(p);
     const text = SCRIPTED_MESSAGES[p];
-    if (text) {
+    // "understood" message is added to aiMessages in Chat.tsx so it appears after user reply
+    if (text && p !== "understood") {
       setScriptedMessages(prev => [...prev, { role: "assistant", content: text }]);
     }
   }, []);
