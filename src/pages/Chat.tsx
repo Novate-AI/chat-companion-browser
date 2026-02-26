@@ -114,10 +114,26 @@ const Chat = () => {
 
     // During intro, check if user input makes sense
     if (isIntroActive) {
-      // Simple gibberish detection: too short, no vowels, or mostly non-letter characters
+      // Intro validation: reject gibberish/too-vague first replies
       const trimmed = input.trim();
+      const normalized = trimmed.toLowerCase();
+      const words = normalized.split(/\s+/).filter(Boolean);
       const letterCount = (trimmed.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]/g) || []).length;
-      const isGibberish = trimmed.length < 2 || (letterCount / Math.max(trimmed.length, 1)) < 0.4;
+
+      const latinLettersOnly = trimmed.replace(/[^a-z]/gi, "");
+      const vowelCount = (latinLettersOnly.match(/[aeiou]/gi) || []).length;
+      const vowelRatio = latinLettersOnly.length ? vowelCount / latinLettersOnly.length : 0;
+
+      const hasMeaningfulIntro = /\b(my name is|i am|i'm|name|from|native language|i speak|speak)\b/i.test(trimmed) || words.length >= 2;
+      const looksLikeRandomLatin = latinLettersOnly.length >= 6 && vowelRatio < 0.23;
+      const longSingleToken = words.length === 1 && latinLettersOnly.length > 8;
+
+      const isGibberish =
+        trimmed.length < 2 ||
+        (letterCount / Math.max(trimmed.length, 1)) < 0.4 ||
+        looksLikeRandomLatin ||
+        longSingleToken ||
+        !hasMeaningfulIntro;
 
       if (isGibberish) {
         // Add the "pardon" message to aiMessages so it appears after the user's reply
