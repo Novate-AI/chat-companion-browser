@@ -17,35 +17,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, language, nativeLanguage, showSuggestions, cefrLevel, validateOnly } = await req.json();
+    const { messages, language, nativeLanguage, showSuggestions, cefrLevel } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-    // Validation-only mode: use the messages as-is (they already contain the validation system prompt)
-    if (validateOnly) {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
-          messages,
-          stream: true,
-        }),
-      });
-      if (!response.ok) {
-        const t = await response.text();
-        console.error("Validation AI error:", response.status, t);
-        return new Response(JSON.stringify({ error: "AI error" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
-    }
 
     const langName = languageNames[language] || "English";
     const nativeLangName = nativeLanguage ? (languageNames[nativeLanguage] || nativeLanguage) : null;

@@ -112,25 +112,46 @@ const Chat = () => {
     stopSpeaking();
     spokenUpToRef.current = 0;
 
-    // During intro, ask AI to validate if user input makes sense
+    // During intro, check if user input makes sense
     if (isIntroActive) {
-      try {
-        // Use a dedicated validation prompt — AI returns UNDERSTOOD or NOT_UNDERSTOOD
-        const validationMessages = [
-          {
-            role: "system",
-            content: `You are a language input validator. The user was asked for their name and native language. Evaluate if the user's message is meaningful, coherent text in ANY language (not gibberish, random characters, or keyboard smashing). Reply with EXACTLY one word: "UNDERSTOOD" if the input is meaningful text (even if it doesn't contain a name), or "NOT_UNDERSTOOD" if it is gibberish, random letters, or nonsensical. Nothing else.`
-          },
-          { role: "user", content: input }
-        ];
+      // Intro validation: reject gibberish/too-vague first replies
+      const trimmed = input.trim();
+      const normalized = trimmed.toLowerCase();
+      const words = normalized.split(/\s+/).filter(Boolean);
+      const letterCount = (trimmed.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]/g) || []).length;
 
-        const resp = await fetch(CHAT_URL.replace("/chat", "/chat"), {
+      const latinLettersOnly = trimmed.replace(/[^a-z]/gi, "");
+      const vowelCount = (latinLettersOnly.match(/[aeiou]/gi) || []).length;
+      const vowelRatio = latinLettersOnly.length ? vowelCount / latinLettersOnly.length : 0;
+
+      const hasMeaningfulIntro = /\b(my name is|i am|i'm|name|from|native language|i speak|speak)\b/i.test(trimmed) || words.length >= 2;
+      const looksLikeRandomLatin = latinLettersOnly.length >= 6 && vowelRatio < 0.23;
+      const longSingleToken = words.length === 1 && latinLettersOnly.length > 8;
+
+      const isGibberish =
+        trimmed.length < 2 ||
+        (letterCount / Math.max(trimmed.length, 1)) < 0.4 ||
+        looksLikeRandomLatin ||
+        longSingleToken ||
+        !hasMeaningfulIntro;
+
+      if (isGibberish) {
+        // Add the "pardon" message to aiMessages so it appears after the user's reply
+        setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
+        handleIntroResponse(false);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const allMessages = [...aiMessages, userMsg];
+        const resp = await fetch(CHAT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ messages: validationMessages, language: langCode, nativeLanguage, showSuggestions: false, cefrLevel, validateOnly: true }),
+          body: JSON.stringify({ messages: allMessages, language: langCode, nativeLanguage, showSuggestions: false, cefrLevel }),
         });
 
         if (!resp.ok || !resp.body) {
@@ -161,18 +182,25 @@ const Chat = () => {
               const parsed = JSON.parse(jsonStr);
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) extractedText += content;
-            } catch { /* skip */ }
+            } catch { /* skip partial chunks */ }
           }
         }
 
-        const isUnderstood = extractedText.trim().toUpperCase().includes("UNDERSTOOD") && !extractedText.trim().toUpperCase().includes("NOT_UNDERSTOOD");
-
-        if (isUnderstood) {
-          setAiMessages(prev => [...prev, { role: "assistant", content: "Thank you for that. So, what do you want to practice today?" }]);
-          handleIntroResponse(true);
-        } else {
+        if (!extractedText || extractedText.trim().length === 0) {
           setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
           handleIntroResponse(false);
+        } else {
+          // Check if the AI's response indicates it couldn't understand the user
+          const lower = extractedText.toLowerCase();
+          const aiDetectedGibberish = /trouble|keyboard|testing|didn.?t understand|not sure what|gibberish|random|unclear|could you (try|say|repeat|type)|what do you mean/i.test(lower);
+          
+          if (aiDetectedGibberish) {
+            setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
+            handleIntroResponse(false);
+          } else {
+            setAiMessages(prev => [...prev, { role: "assistant", content: "Thank you for that. So, what do you want to practice today?" }]);
+            handleIntroResponse(true);
+          }
         }
       } catch {
         setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
