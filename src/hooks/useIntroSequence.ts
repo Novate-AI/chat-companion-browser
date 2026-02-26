@@ -8,7 +8,7 @@ const SEGMENTS: Record<string, { start: number; end: number; loop: boolean }> = 
   greeting: { start: 10, end: 15, loop: false },
   ask_name: { start: 15, end: 20, loop: false },
   idle: { start: 0, end: 10, loop: true },
-  not_understood: { start: 30, end: 36, loop: false },
+  not_understood: { start: 31, end: 36, loop: false },
   understood: { start: 23, end: 29, loop: false },
   normal: { start: 0, end: 10, loop: true },
 };
