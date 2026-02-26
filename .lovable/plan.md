@@ -1,80 +1,76 @@
 
 
-# Fix: Keep Microphone Active for Full Response Window
+# Replace Avatar with Video-Based AI Tutor "Novate Abby"
 
-## Root Cause
+## Overview
+Replace the static Tom Holland avatar with a pre-generated video avatar ("Novate Abby") that plays specific video segments synchronized with scripted text bubbles during the intro sequence. Audio comes from the video itself, not TTS.
 
-Two issues cause the current behavior:
+## Layout Change
+The chat page will be restructured into a **split layout**:
+- **Left side**: The video avatar player (always visible)
+- **Right side**: The chat messages and input
 
-1. **Speech recognition ends after one phrase**: The `useSpeechRecognition` hook uses `continuous = false`, so when the user pauses even briefly, the browser fires `onresult` which immediately calls `handleUserResponse`, stopping the timer and advancing to the next question -- even if 18 seconds remain.
+On mobile, the video will sit above the chat area.
 
-2. **Mic breaks after auto-start**: Calling `SpeechRecognition.start()` inside `setTimeout` (as `startUserResponseWindow` does) loses the browser's "user gesture" context, causing permission errors and rendering the mic unusable.
+## Video Segment Map
 
-## Solution
+| State | Video Segment | Text Bubble |
+|-------|--------------|-------------|
+| Intro greeting | 10s - 15s | "Hi, I am Novate Abby. Nice to meet you. I will be your tutor for today." |
+| Ask name | 15s - 19s | "Can you tell me your name and native language please?" |
+| Idle / waiting | 0s - 10s (loop) | -- (no new bubble) |
+| Didn't understand | 30s - 36s | "Pardon me, can you repeat that again?" |
+| Understood reply | 23s - 29s | "Thank you for that. So, what do you want to practice today?" |
 
-### 1. Continuous Speech Recognition with Auto-Restart (`src/hooks/useSpeechRecognition.ts`)
+## Scripted Intro Flow (replaces AI-streamed intro)
 
-Rewrite the hook to:
-- Set `continuous = true` so the browser keeps listening through pauses
-- Use a ref (`shouldBeListeningRef`) to track whether we *intend* to be listening
-- On the `onend` event, automatically restart recognition if we still intend to listen (browsers sometimes stop recognition due to silence -- this restarts it)
-- Accumulate all transcripts during the window into a single string instead of firing `onResult` per phrase
-- Only call `onResult` with the accumulated transcript when `stop()` is explicitly called
-- Handle errors gracefully (`no-speech` is normal, `not-allowed` means permission denied)
-
-### 2. Decouple Mic from Timer Advancement (`src/pages/IELTSChat.tsx`)
-
-Change how user responses work during timed windows:
-- Remove the pattern where `onVoiceResult` immediately calls `handleUserResponse` (which stops timers and advances)
-- Instead, accumulate speech into a ref during the response window
-- Only advance when the **countdown timer expires** (20s for Part 1, 120s for Part 2, 25s for Part 3)
-- The user can also submit early via the text input or a "Done" action, but pausing speech alone will NOT advance
-
-### 3. First Mic Activation from User Gesture
-
-- The very first mic activation happens when the user clicks "Yes" / types their first response (a real user gesture)
-- Subsequent auto-starts work because the permission is already granted and we use the auto-restart pattern in the `onend` handler
-- Remove the `setTimeout(() => startListening(), 500)` pattern that breaks gesture context
-
-## How It Works After the Fix
-
-```
-AI asks question -> AI finishes speaking -> Timer starts (20s/25s/120s)
-                                             |
-                                             v
-                                    Mic activates, user speaks
-                                    User pauses -> mic auto-restarts
-                                    User speaks again -> transcript accumulates
-                                             |
-                                             v
-                                    Timer hits 0 -> mic stops
-                                                 -> accumulated transcript saved
-                                                 -> advance to next question
-```
-
-The user gets the FULL duration regardless of pauses. Speech is accumulated, not treated as individual responses.
-
-## Files Modified
-
-| File | Change |
-|------|--------|
-| `src/hooks/useSpeechRecognition.ts` | Rewrite: `continuous = true`, auto-restart on `onend`, accumulate transcripts, only fire result on explicit stop |
-| `src/pages/IELTSChat.tsx` | Decouple voice input from phase advancement; only advance on timer expiry or explicit user submit; remove `setTimeout` mic starts |
+1. On mount, skip the `triggerIntro()` call to the chat edge function
+2. Instead, run a scripted state machine:
+   - State `greeting`: Play 10s-15s, show first text bubble
+   - On video segment end, transition to `ask_name`: Play 15s-19s, show second bubble
+   - On segment end, transition to `idle`: Loop 0s-10s, wait for user input
+   - If user responds and AI returns an error or empty response (can't understand), transition to `not_understood`: Play 30s-36s, show pardon bubble, then back to `idle`
+   - If user responds and AI understands, transition to `understood`: Play 23s-29s, show thank you bubble
+   - After `understood` segment ends, transition to `normal` mode where the AI chat continues as usual
 
 ## Technical Details
 
-**useSpeechRecognition.ts changes:**
-- Add `shouldBeListeningRef` to track intent
-- Add `accumulatedRef` to collect all speech during a window
-- Set `continuous = true` on the recognition instance
-- `onend`: if `shouldBeListeningRef.current` is true, call `recognition.start()` again (auto-restart)
-- `onresult`: append transcript to `accumulatedRef`, do NOT call `onResult` callback
-- New `stop()`: set `shouldBeListeningRef` to false, call `recognition.stop()`, then fire `onResult` with the full accumulated transcript
-- `onerror`: handle `no-speech` (ignore, will auto-restart), `not-allowed` (stop and warn)
+### New Files
+1. **`src/components/VideoAvatar.tsx`** -- A React component wrapping an HTML5 `<video>` element. Props: `segment` (start/end times), `loop`, `onSegmentEnd` callback. Uses `timeupdate` events to enforce segment boundaries and loop behavior.
 
-**IELTSChat.tsx changes:**
-- `onVoiceResult` callback: instead of calling `handleUserResponse`, just append to a `pendingTranscriptRef`
-- `startUserResponseWindow`: start mic + countdown; when countdown hits 0, stop mic, read `pendingTranscriptRef`, then call `advanceAfterUserResponse` with the accumulated text
-- User can still type and submit manually (which stops timer + mic and advances immediately)
-- For Part 2 long window: same pattern but 120s
+2. **`src/hooks/useIntroSequence.ts`** -- A state machine hook managing the intro phases (`greeting` -> `ask_name` -> `idle` -> `not_understood` / `understood` -> `normal`). Returns: current video segment config, scripted messages to display, phase state, and a handler for processing user responses.
+
+### Modified Files
+3. **`src/pages/Chat.tsx`** -- Major refactor:
+   - Copy the video file to `public/videos/novate-abby.mp4`
+   - Import and use `VideoAvatar` and `useIntroSequence`
+   - Replace `triggerIntro()` with the scripted intro sequence
+   - During intro phases, scripted messages are injected directly into the messages array (no AI call)
+   - Disable TTS (`useSpeechSynthesis`) during intro phases -- video audio plays instead
+   - After the intro completes (`normal` phase), resume standard AI chat flow
+   - Update layout to show video alongside chat
+   - Rename header from "Tom Holland" to "Novate Abby"
+
+4. **`src/components/ChatBubble.tsx`** -- Remove the `LingbotAvatar` from assistant bubbles (avatar is now the video panel, not inline)
+
+5. **`supabase/functions/chat/index.ts`** -- Update the system prompt: replace "Tom Holland" persona with "Novate Abby" and update the intro instruction so the AI never repeats the scripted intro
+
+### Video Segment Player Logic
+The `VideoAvatar` component will:
+- Accept `startTime`, `endTime`, and `loop` props
+- On mount or prop change, seek to `startTime` and play
+- Listen to `timeupdate`: if `currentTime >= endTime`, either loop back to `startTime` or pause and call `onSegmentEnd`
+- The video element will have `playsInline`, `autoPlay` attributes for mobile compatibility
+
+### Intro State Machine
+```text
+[mount] --> GREETING (10-15s)
+        --> ASK_NAME (15-19s)
+        --> IDLE (0-10s loop)
+        --> user responds
+            |-- AI fails/empty --> NOT_UNDERSTOOD (30-36s) --> IDLE
+            |-- AI succeeds    --> UNDERSTOOD (23-29s) --> NORMAL
+```
+
+During `NORMAL` mode, the video loops the idle segment (0-10s) and standard AI chat resumes with TTS re-enabled.
 
