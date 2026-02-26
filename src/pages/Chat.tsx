@@ -161,22 +161,37 @@ const Chat = () => {
           return;
         }
 
-        // Read the stream but don't add to messages — we only check if AI understood
+        // Parse SSE stream to extract actual AI text content
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
-        let fullText = "";
+        let rawBuffer = "";
+        let extractedText = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          fullText += decoder.decode(value, { stream: true });
+          rawBuffer += decoder.decode(value, { stream: true });
+          let newlineIndex: number;
+          while ((newlineIndex = rawBuffer.indexOf("\n")) !== -1) {
+            let line = rawBuffer.slice(0, newlineIndex);
+            rawBuffer = rawBuffer.slice(newlineIndex + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) extractedText += content;
+            } catch { /* skip partial chunks */ }
+          }
         }
 
-        if (!fullText || fullText.trim().length === 0) {
+        if (!extractedText || extractedText.trim().length === 0) {
           setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
           handleIntroResponse(false);
         } else {
           // Check if the AI's response indicates it couldn't understand the user
-          const lower = fullText.toLowerCase();
+          const lower = extractedText.toLowerCase();
           const aiDetectedGibberish = /trouble|keyboard|testing|didn.?t understand|not sure what|gibberish|random|unclear|could you (try|say|repeat|type)|what do you mean/i.test(lower);
           
           if (aiDetectedGibberish) {
