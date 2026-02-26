@@ -1,19 +1,15 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { LingbotAvatar } from "./LingbotAvatar";
-import { Volume2, ChevronDown, ChevronUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { parseAssistantMessage } from "@/lib/chatHelpers";
 
 interface ChatBubbleProps {
   role: "user" | "assistant";
   content: string;
-  isSpeaking?: boolean;
-  onSpeak?: () => void;
   onSuggestionClick?: (suggestion: string) => void;
 }
 
-export function ChatBubble({ role, content, isSpeaking, onSpeak, onSuggestionClick }: ChatBubbleProps) {
+export function ChatBubble({ role, content, onSuggestionClick }: ChatBubbleProps) {
   const isBot = role === "assistant";
   const [showTranslation, setShowTranslation] = useState(false);
 
