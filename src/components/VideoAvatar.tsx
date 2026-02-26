@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 
 interface VideoAvatarProps {
   startTime: number;
@@ -9,35 +9,42 @@ interface VideoAvatarProps {
 
 export function VideoAvatar({ startTime, endTime, loop = false, onSegmentEnd }: VideoAvatarProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const segmentRef = useRef({ startTime, endTime, loop });
+  const onSegmentEndRef = useRef(onSegmentEnd);
+  const firedRef = useRef(false);
 
-  // Update ref when props change to avoid stale closures
   useEffect(() => {
-    segmentRef.current = { startTime, endTime, loop };
-  }, [startTime, endTime, loop]);
+    onSegmentEndRef.current = onSegmentEnd;
+  }, [onSegmentEnd]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
+    firedRef.current = false;
     video.currentTime = startTime;
     video.play().catch(() => {});
 
-    const handleTimeUpdate = () => {
-      const { startTime: st, endTime: et, loop: shouldLoop } = segmentRef.current;
-      if (video.currentTime >= et) {
-        if (shouldLoop) {
-          video.currentTime = st;
+    let rafId: number;
+
+    const tick = () => {
+      if (!video) return;
+      if (video.currentTime >= endTime - 0.05) {
+        if (loop) {
+          video.currentTime = startTime;
         } else {
           video.pause();
-          onSegmentEnd?.();
+          if (!firedRef.current) {
+            firedRef.current = true;
+            onSegmentEndRef.current?.();
+          }
+          return; // stop polling
         }
       }
+      rafId = requestAnimationFrame(tick);
     };
 
-    video.addEventListener("timeupdate", handleTimeUpdate);
-    return () => video.removeEventListener("timeupdate", handleTimeUpdate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [startTime, endTime, loop]);
 
   return (
