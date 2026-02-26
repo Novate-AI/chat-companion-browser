@@ -4,7 +4,7 @@ import { languages } from "@/lib/languages";
 import { ChatBubble } from "@/components/ChatBubble";
 import { ChatInput } from "@/components/ChatInput";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-
+import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
 import { TranscriptDialog } from "@/components/TranscriptDialog";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { VideoAvatar } from "@/components/VideoAvatar";
@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Lightbulb, LightbulbOff, FileText, ClipboardCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
+import { getSpeakableText } from "@/lib/chatHelpers";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -37,6 +37,8 @@ const Chat = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const { isSpeaking, speak, speakQueued, stop: stopSpeaking } = useSpeechSynthesis(lang.speechCode);
+  const spokenUpToRef = useRef(0);
 
   const {
     phase,
@@ -65,6 +67,30 @@ const Chat = () => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, aiMessages]);
 
+  // Sentence chunking for TTS (only in normal mode)
+  const checkAndQueueSentences = useCallback((fullText: string) => {
+    if (isIntroActive) return;
+    const speakable = getSpeakableText(fullText);
+    const remaining = speakable.slice(spokenUpToRef.current);
+    const parts = remaining.split(/(?<=[.!?])\s+/);
+    for (let i = 0; i < parts.length - 1; i++) {
+      const sentence = parts[i].trim();
+      if (sentence) {
+        speakQueued(sentence);
+        spokenUpToRef.current += parts[i].length + 1;
+      }
+    }
+  }, [speakQueued, isIntroActive]);
+
+  const flushRemainingSpeech = useCallback((fullText: string) => {
+    if (isIntroActive) return;
+    const speakable = getSpeakableText(fullText);
+    const remaining = speakable.slice(spokenUpToRef.current).trim();
+    if (remaining) {
+      speakQueued(remaining);
+      spokenUpToRef.current = speakable.length;
+    }
+  }, [speakQueued, isIntroActive]);
 
   // Detect native language
   useEffect(() => {
@@ -83,6 +109,8 @@ const Chat = () => {
     const userMsg: Msg = { role: "user", content: input };
     setAiMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+    stopSpeaking();
+    spokenUpToRef.current = 0;
 
     // During intro, ask AI to validate if user input makes sense
     if (isIntroActive) {
@@ -214,7 +242,7 @@ const Chat = () => {
               }
               return [...prev, { role: "assistant", content: snapshot }];
             });
-            
+            checkAndQueueSentences(snapshot);
           }
         } catch {
           textBuffer = line + "\n" + textBuffer;
@@ -230,6 +258,10 @@ const Chat = () => {
     else startListening();
   };
 
+  const handleSpeak = (text: string) => {
+    if (isSpeaking) stopSpeaking();
+    else speak(getSpeakableText(text));
+  };
 
   const handleSuggestionClick = (suggestion: string) => {
     if (!isLoading) sendMessage(suggestion);
@@ -299,6 +331,8 @@ const Chat = () => {
                 key={i}
                 role={msg.role}
                 content={msg.content}
+                isSpeaking={isSpeaking}
+                onSpeak={undefined}
                 onSuggestionClick={msg.role === "assistant" && i === messages.length - 1 ? handleSuggestionClick : undefined}
               />
             ))}

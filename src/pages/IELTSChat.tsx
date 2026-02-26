@@ -535,6 +535,8 @@ const IELTSChat = () => {
             key={i}
             role={msg.role}
             content={msg.content}
+            isSpeaking={isSpeaking}
+            onSpeak={msg.role === "assistant" ? () => handleSpeak(msg.content) : undefined}
           />
         ))}
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
