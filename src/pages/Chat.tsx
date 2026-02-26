@@ -67,30 +67,8 @@ const Chat = () => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, aiMessages]);
 
-  // Sentence chunking for TTS (only in normal mode)
-  const checkAndQueueSentences = useCallback((fullText: string) => {
-    if (isIntroActive) return;
-    const speakable = getSpeakableText(fullText);
-    const remaining = speakable.slice(spokenUpToRef.current);
-    const parts = remaining.split(/(?<=[.!?])\s+/);
-    for (let i = 0; i < parts.length - 1; i++) {
-      const sentence = parts[i].trim();
-      if (sentence) {
-        speakQueued(sentence);
-        spokenUpToRef.current += parts[i].length + 1;
-      }
-    }
-  }, [speakQueued, isIntroActive]);
-
-  const flushRemainingSpeech = useCallback((fullText: string) => {
-    if (isIntroActive) return;
-    const speakable = getSpeakableText(fullText);
-    const remaining = speakable.slice(spokenUpToRef.current).trim();
-    if (remaining) {
-      speakQueued(remaining);
-      spokenUpToRef.current = speakable.length;
-    }
-  }, [speakQueued, isIntroActive]);
+  // TTS disabled — video avatar provides audio during intro, no TTS in normal mode
+  const checkAndQueueSentences = useCallback((_fullText: string) => {}, []);
 
   // Detect native language
   useEffect(() => {
