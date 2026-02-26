@@ -29,8 +29,8 @@ export function useIntroSequence() {
     phaseRef.current = p;
     setPhase(p);
     const text = SCRIPTED_MESSAGES[p];
-    // "understood" message is added to aiMessages in Chat.tsx so it appears after user reply
-    if (text && p !== "understood") {
+    // "understood" and "not_understood" messages are added to aiMessages in Chat.tsx so they appear after user reply
+    if (text && p !== "understood" && p !== "not_understood") {
       setScriptedMessages(prev => [...prev, { role: "assistant", content: text }]);
     }
   }, []);
