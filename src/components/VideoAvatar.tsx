@@ -41,7 +41,7 @@ export function VideoAvatar({ startTime, endTime, loop = false, onSegmentEnd }: 
   }, [startTime, endTime, loop]);
 
   return (
-    <div className="w-full aspect-[3/4] rounded-2xl overflow-hidden bg-black shadow-lg">
+    <div className="w-full aspect-[2/3] rounded-2xl overflow-hidden bg-black shadow-lg">
       <video
         ref={videoRef}
         src="/videos/novate-abby.mp4"
