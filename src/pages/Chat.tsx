@@ -112,7 +112,7 @@ const Chat = () => {
     stopSpeaking();
     spokenUpToRef.current = 0;
 
-    // During intro, send to AI to check understanding
+    // During intro, send to AI to check understanding but don't show AI response
     if (isIntroActive) {
       try {
         const allMessages = [...aiMessages, userMsg];
@@ -131,15 +131,19 @@ const Chat = () => {
           return;
         }
 
-        let assistantSoFar = await processStream(resp.body, "");
-        if (!assistantSoFar || assistantSoFar.trim().length === 0) {
+        // Read the stream but don't add to messages — we only check if AI understood
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          fullText += decoder.decode(value, { stream: true });
+        }
+
+        if (!fullText || fullText.trim().length === 0) {
           handleIntroResponse(false);
         } else {
-          // Store the AI response but don't show it yet — the scripted "understood" message plays first
-          setAiMessages(prev => {
-            // The stream already added the assistant message, keep it
-            return prev;
-          });
           handleIntroResponse(true);
         }
       } catch {
@@ -168,7 +172,6 @@ const Chat = () => {
       if (resp.status === 402) { toast({ title: "Credits needed", description: "Please add credits.", variant: "destructive" }); setIsLoading(false); return; }
       if (!resp.ok || !resp.body) throw new Error("Failed to connect");
       assistantSoFar = await processStream(resp.body, assistantSoFar);
-      flushRemainingSpeech(assistantSoFar);
     } catch (e) {
       console.error(e);
       toast({ title: "Error", description: "Could not reach the tutor. Try again.", variant: "destructive" });
@@ -300,7 +303,7 @@ const Chat = () => {
                 role={msg.role}
                 content={msg.content}
                 isSpeaking={isSpeaking}
-                onSpeak={msg.role === "assistant" && !isIntroActive ? () => handleSpeak(msg.content) : undefined}
+                onSpeak={undefined}
                 onSuggestionClick={msg.role === "assistant" && i === messages.length - 1 ? handleSuggestionClick : undefined}
               />
             ))}
