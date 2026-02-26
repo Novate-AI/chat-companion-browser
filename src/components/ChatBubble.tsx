@@ -24,13 +24,7 @@ export function ChatBubble({ role, content, isSpeaking, onSpeak, onSuggestionCli
   return (
     <div className={cn("mb-4", isBot ? "" : "flex justify-end")}>
       <div className={cn("flex gap-3", isBot ? "justify-start" : "justify-end")}>
-        {isBot && (
-          <div className="rounded-full p-0.5 bg-gradient-to-br from-teal-400 to-cyan-400 self-end shrink-0">
-            <div className="rounded-full overflow-hidden bg-white">
-              <LingbotAvatar size="sm" isSpeaking={isSpeaking} />
-            </div>
-          </div>
-        )}
+      {/* Avatar removed — video panel serves as the avatar */}
         <div className={cn(
           "max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm",
           isBot
