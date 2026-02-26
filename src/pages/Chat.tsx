@@ -112,8 +112,21 @@ const Chat = () => {
     stopSpeaking();
     spokenUpToRef.current = 0;
 
-    // During intro, send to AI to check understanding but don't show AI response
+    // During intro, check if user input makes sense
     if (isIntroActive) {
+      // Simple gibberish detection: too short, no vowels, or mostly non-letter characters
+      const trimmed = input.trim();
+      const letterCount = (trimmed.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]/g) || []).length;
+      const isGibberish = trimmed.length < 2 || (letterCount / Math.max(trimmed.length, 1)) < 0.4;
+
+      if (isGibberish) {
+        // Add the "pardon" message to aiMessages so it appears after the user's reply
+        setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
+        handleIntroResponse(false);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const allMessages = [...aiMessages, userMsg];
         const resp = await fetch(CHAT_URL, {
@@ -126,6 +139,7 @@ const Chat = () => {
         });
 
         if (!resp.ok || !resp.body) {
+          setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
           handleIntroResponse(false);
           setIsLoading(false);
           return;
@@ -142,6 +156,7 @@ const Chat = () => {
         }
 
         if (!fullText || fullText.trim().length === 0) {
+          setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
           handleIntroResponse(false);
         } else {
           // Add the scripted "Thank you" as an AI message so it appears after the user's reply
@@ -149,6 +164,7 @@ const Chat = () => {
           handleIntroResponse(true);
         }
       } catch {
+        setAiMessages(prev => [...prev, { role: "assistant", content: "Pardon me, can you repeat that again?" }]);
         handleIntroResponse(false);
       } finally {
         setIsLoading(false);
